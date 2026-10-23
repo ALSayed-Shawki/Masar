@@ -33,12 +33,21 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          set +e
           args=()
-          [ -n "$ANTHROPIC_API_KEY" ] && args+=("ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
-          [ -n "$CRON_SECRET" ] && args+=("CRON_SECRET=$CRON_SECRET")
-          if [ ${#args[@]} -gt 0 ]; then supabase secrets set "${args[@]}" --project-ref "$PROJECT_REF"; fi
+          if [ -n "$ANTHROPIC_API_KEY" ]; then args+=("ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"); else echo "::warning::ANTHROPIC_API_KEY is empty"; fi
+          if [ -n "$CRON_SECRET" ]; then args+=("CRON_SECRET=$CRON_SECRET"); else echo "::warning::CRON_SECRET is empty"; fi
+          [ ${#args[@]} -eq 0 ] && exit 0
+          supabase secrets set "${args[@]}" --project-ref "$PROJECT_REF" 2>&1 | tee secrets.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then tail -5 secrets.log | while read -r l; do echo "::error title=Secrets::$l"; done; fi
+          exit $code
       - name: Deploy edge functions
         run: |
+          set +e
+          fail=0
           for f in ai push-config med-reminders; do
-            supabase functions deploy "$f" --project-ref "$PROJECT_REF"
+            supabase functions deploy "$f" --project-ref "$PROJECT_REF" --use-api 2>&1 | tee "fn-$f.log"
+            if [ "${PIPESTATUS[0]}" -ne 0 ]; then fail=1; tail -5 "fn-$f.log" | while read -r l; do echo "::error title=Function $f::$l"; done; fi
           done
+          exit $fail
