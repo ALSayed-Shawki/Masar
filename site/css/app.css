@@ -265,11 +265,9 @@ ul.coach{margin:0;padding-inline-start:18px;display:grid;gap:4px;font-size:14px}
 
 @media (prefers-reduced-motion:no-preference){.sheet:not([hidden]){animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
 
-/* swipe between tabs */
-#view[data-slide="l"]{animation:slideL .22s ease-out} #view[data-slide="r"]{animation:slideR .22s ease-out}
-@keyframes slideL{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
-@keyframes slideR{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
-@media (prefers-reduced-motion:reduce){#view[data-slide]{animation:none}}
+/* page-turn swipe: vertical scrolling stays native, sideways moves are ours */
+#view{touch-action:pan-y;backface-visibility:hidden}
+html,body{overflow-x:clip}
 /* tasks as tiles (mini cards) */
 .tl.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px}
 .tiles .task{grid-template-columns:auto 1fr;grid-template-areas:"chk star" "body body";gap:8px;padding:10px 12px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);min-height:104px;align-content:start;position:relative;overflow:hidden}
