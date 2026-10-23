@@ -1,3 +1,4 @@
+// Deployed by .github/workflows/pages.yml
 // Masar service worker: offline app shell + push notifications.
 // __BUILD__ is replaced on deploy so each release refreshes the cache.
 const CACHE = 'masar-__BUILD__';
