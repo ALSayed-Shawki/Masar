@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Stamp service worker version
-        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/" site/sw.js
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}/g" site/sw.js site/index.html site/shela.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

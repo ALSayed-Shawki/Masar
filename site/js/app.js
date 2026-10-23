@@ -115,7 +115,16 @@ let shownDay = today();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && shownDay !== today()) { shownDay = today(); render(); } });
 setInterval(() => { if (shownDay !== today()) { shownDay = today(); render(); } }, 60000);
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+// Updates: check for a new version whenever the app comes back to the screen, and reload once
+// when the new service worker takes over, so a deploy shows up without clearing anything.
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(reg => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded && !sheetOpen()) { reloaded = true; location.reload(); } });
+}
 
 (async () => {
   if (configured) {
