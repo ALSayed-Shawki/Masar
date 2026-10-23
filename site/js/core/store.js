@@ -8,18 +8,11 @@ const listeners = new Set();
 export const onP = fn => { listeners.add(fn); return () => listeners.delete(fn); };
 const emit = () => listeners.forEach(f => f());
 
+// Starter structure for a new account; each person renames / adds their own.
 const DEFAULT_PROJECTS = [
-  ['محيط الأهرام', 'work'], ['الإضاءة المتطورة', 'work'], ['أكناف', 'work'], ['فاد', 'work'], ['ديموهات العملاء', 'work'],
-  ['أنا بيكري', 'work'], ['ام اس للخضار', 'work'], ['ام اس للاستيراد والتصدير', 'work'],
-  ['CMA', 'growth'], ['Odoo 20', 'growth'], ['الذكاء الاصطناعي', 'growth'], ['المحاسبة', 'growth'],
-  ['البزنس الخاص', 'business'], ['شخصي', 'personal'],
+  ['الشغل الأساسي', 'work'], ['مشاريع جانبية', 'work'], ['التطوير والتعلّم', 'growth'], ['البزنس الخاص', 'business'], ['شخصي', 'personal'],
 ];
-const DEFAULT_GOALS = [
-  ['الأهرام: أتمتة كاملة وتشغيل الإنتاج على ERP متكامل مع AI', 'work', ''],
-  ['CMA: حسم القرار وبدء المذاكرة', 'growth', 'قرار: أكمل ولا لأ، وأي Part أبدأ بيها'],
-  ['الإلمام بجديد Odoo 20', 'growth', ''],
-  ['بدء البزنس الخاص', 'business', ''],
-];
+const DEFAULT_GOALS = [];
 
 const Q = {
   tasks: () => sb.from('tasks').select('*').or(`status.eq.todo,done_at.gte.${new Date(Date.now() - 120 * 864e5).toISOString()}`),
@@ -98,6 +91,8 @@ export async function setSetting(key, value) {
 }
 
 // helpers used by several screens
+/** The signed-in person's name (Settings → اسمك); used in greetings and AI prompts. */
+export const myName = () => (P.settings.profile || {}).name || '';
 export const pName = id => P.projects.find(p => p.id === id)?.name || '';
 export const openTasks = () => P.tasks.filter(t => t.status === 'todo');
 export const doneDate = t => t.done_at ? ymd(new Date(t.done_at)) : '';

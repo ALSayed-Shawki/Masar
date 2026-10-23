@@ -5,7 +5,7 @@
 import { $, actions, closeSheet, sheetOpen } from './core/dom.js';
 import { configured, sb, getSession, isAnon, errText } from './core/supa.js';
 import { fmtDay, fmtWeekday, today } from './core/dates.js';
-import { renderLogin, renderNotConfigured } from './modules/auth/view.js';
+import { renderLogin, renderNotConfigured, maybeOnboard } from './modules/auth/view.js';
 import { renderToday, renderReview } from './modules/today/view.js';
 import { renderTasks } from './modules/tasks/view.js';
 import { renderLedger } from './modules/ledger/view.js';
@@ -90,7 +90,7 @@ async function renderInner() {
     return renderShela(view, render);
   }
   const fab = $('#fab'); fab.hidden = page === 'settings'; fab.textContent = '+'; fab.dataset.act = 'capture'; fab.classList.add('round');
-  if (!P.loaded) { view.innerHTML = '<section class="card"><div class="skel"></div><div class="skel" style="width:70%"></div></section>'; await loadAll(); syncAzkarCache(); }
+  if (!P.loaded) { view.innerHTML = '<section class="card"><div class="skel"></div><div class="skel" style="width:70%"></div></section>'; await loadAll(); syncAzkarCache(); setTimeout(maybeOnboard, 300); }
   if (['azkar', 'chat', 'more', 'project', 'review'].includes(page)) fab.hidden = true;
   return (PAGES[page] || renderToday)(view, render, arg);
 }

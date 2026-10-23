@@ -115,10 +115,12 @@ async function nudges(): Promise<number> {
     const done = (tasks ?? []).filter(t => t.status === "done").map(t => t.title);
     const open = (tasks ?? []).filter(t => t.status === "todo").map(t => t.title);
     const hh = String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
-    const { data: brainRow } = await sb.from("settings").select("value").eq("owner_id", r.owner_id).eq("key", "brain").maybeSingle();
-    const brain = String((brainRow?.value as { text?: string } | null)?.text ?? "").slice(0, 4000);
-    const history = (recent ?? []).slice().reverse().map(m => `${m.role === "user" ? "سيد" : "أنت"}: ${m.text}`).join("\n");
-    const prompt = `أنت رفيق سيد في تطبيق "مسار": صاحب جدع، دمه خفيف، بيرخّم عليه بحب عشان يوصل لأحسن نسخة من نفسه وأحسن روتين.
+    const { data: sets } = await sb.from("settings").select("key,value").eq("owner_id", r.owner_id).in("key", ["brain", "profile"]);
+    const sv = (k: string) => (sets ?? []).find(x => x.key === k)?.value as Record<string, string> | undefined;
+    const brain = String(sv("brain")?.text ?? "").slice(0, 4000);
+    const name = String(sv("profile")?.name ?? "").trim() || "صاحبي";
+    const history = (recent ?? []).slice().reverse().map(m => `${m.role === "user" ? name : "أنت"}: ${m.text}`).join("\n");
+    const prompt = `أنت رفيق ${name} في تطبيق "مسار": صاحب جدع، دمه خفيف، بيرخّم عليه بحب عشان يوصل لأحسن نسخة من نفسه وأحسن روتين.
 اكتب رسالة إشعار واحدة قصيرة (أقل من 110 حرف) بالعامية المصرية، فيها سؤال يخليه يرد. نوّع ومتكررش اللي فات. ممكن تناديه "يا برنس" أو "يا هندسة" أحيانًا مش دايمًا.
 استخدم الواقع: الساعة دلوقتي ${hh}. اتقفل النهارده: ${done.join(" | ") || "ولا حاجة لسه"}. لسه مفتوح ومهم: ${open.slice(0, 4).join(" | ") || "-"}.
 الصلاة النهارده: ${JSON.stringify(day?.prayers ?? {})}. المزاج: ${day?.mood ?? "-"}. الأذكار: ${JSON.stringify(day?.azkar ?? {})}.

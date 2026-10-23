@@ -15,7 +15,7 @@ const T = (window.__DB = window.__DB || {
     { id: 'e2', group_id: 'g1', title: 'بقالة', amount_c: 9000, date: '2026-10-21', payer_id: 'm-a', split_type: 'one', participants: ['m-g'], weights: {}, amounts: {}, category: 'بقالة وبيت', note: '', created_by: FRIEND, created_by_member: 'm-a', created_at: '2026-10-21T20:00:00Z', deleted: false },
   ],
   settlements: [],
-  chat_messages: [{ id: 'c1', owner_id: OWNER, role: 'assistant', text: 'عامل إيه يا برنس؟ خلصت تقرير أكناف ولا لسه؟', source: 'nudge', created_at: '2026-10-23T15:00:00Z' }], projects: [], tasks: [], notes: [], wins: [], money_entries: [], goals: [], weeks: [], settings: [],
+  chat_messages: [{ id: 'c1', owner_id: OWNER, role: 'assistant', text: 'عامل إيه يا برنس؟ خلصت تقرير أكناف ولا لسه؟', source: 'nudge', created_at: '2026-10-23T15:00:00Z' }], projects: [], tasks: [], notes: [], wins: [], money_entries: [], goals: [], weeks: [], settings: [{ owner_id: OWNER, key: 'profile', value: { name: 'سيد' } }],
   day_logs: [], medications: [{ id: 'med1', owner_id: OWNER, name: 'فيتامين د', times: ['09:00', '21:00'], timezone: 'Asia/Riyadh', active: true, created_at: '2026-10-01' }],
   push_subscriptions: [],
 });

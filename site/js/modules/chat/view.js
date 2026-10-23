@@ -4,7 +4,7 @@ import { $, esc, toast, val, registerActions } from '../../core/dom.js';
 import { today } from '../../core/dates.js';
 import { errText } from '../../core/supa.js';
 import { ai } from '../../core/ai.js';
-import { P, insert, openTasks, doneDate } from '../../core/store.js';
+import { P, myName, insert, openTasks, doneDate } from '../../core/store.js';
 
 const UI = { rerender: () => {}, busy: false };
 const fmtTime = iso => new Date(iso).toLocaleString('ar-EG-u-nu-latn', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
@@ -37,7 +37,7 @@ registerActions({
     UI.busy = true; el.disabled = true;
     try {
       await insert('chat', { role: 'user', text, source: 'chat' });
-      const history = general().slice(0, 12).reverse().map(m => `${m.role === 'user' ? 'سيد' : 'أنت'}: ${m.text}`).join('\n');
+      const history = general().slice(0, 12).reverse().map(m => `${m.role === 'user' ? (myName() || 'أنا') : 'أنت'}: ${m.text}`).join('\n');
       const reply = await ai('chat', text, { today: todayContext(), history });
       if (reply) await insert('chat', { role: 'assistant', text: reply.trim(), source: 'chat' });
     } catch (x) { toast(x.message || errText(x)); }

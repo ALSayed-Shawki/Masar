@@ -4,7 +4,7 @@ import { $, esc, toast, openSheet, closeSheet, seg, segV, val, registerActions }
 import { today, weekStart, fmtShort, ymd } from '../../core/dates.js';
 import { errText } from '../../core/supa.js';
 import { ai, mdHtml } from '../../core/ai.js';
-import { P, insert, update, openTasks, doneDate } from '../../core/store.js';
+import { P, myName, insert, update, openTasks, doneDate } from '../../core/store.js';
 import { AREAS, taskList, byDue } from '../tasks/view.js';
 
 const STATUS = { active: 'شغال', prospect: 'عميل محتمل / ديمو', paused: 'متوقف', done: 'خلص' };
@@ -43,7 +43,7 @@ ${done.map(t => `- ${doneDate(t)}: ${t.title}${t.done_note ? ` — ملاحظة:
 ملاحظات وأفكار عن المشروع:
 ${notes.map(n => `- ${n.text}`).join('\n') || '-'}
 المحادثة اللي فاتت عن المشروع:
-${threadOf(p.id).slice(-8).map(m => `${m.role === 'user' ? 'سيد' : 'أنت'}: ${m.text}`).join('\n') || '-'}
+${threadOf(p.id).slice(-8).map(m => `${m.role === 'user' ? (myName() || 'أنا') : 'أنت'}: ${m.text}`).join('\n') || '-'}
 
 المطلوب: ${question}`;
 }
@@ -112,5 +112,5 @@ registerActions({
     catch (x) { toast(errText(x)); }
   },
   pjAsk: el => { const p = P.projects.find(x => x.id === el.dataset.id); if (p && !UI.busy) askProject(p, QUESTIONS[el.dataset.q]); },
-  pjSend: el => { const p = P.projects.find(x => x.id === el.dataset.id), t = val('pj-in'); if (p && t && !UI.busy) askProject(p, `رد على سيد: ${t}`, t); },
+  pjSend: el => { const p = P.projects.find(x => x.id === el.dataset.id), t = val('pj-in'); if (p && t && !UI.busy) askProject(p, `رد على ${myName() || "صاحب الحساب"}: ${t}`, t); },
 });

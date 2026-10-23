@@ -2,7 +2,7 @@
 import { $, esc, toast, openSheet, closeSheet, val, registerActions, confirmTap, copyText, waLink } from '../../core/dom.js';
 import { sb, errText } from '../../core/supa.js';
 import { pushState, enablePush, testNotification, isIOS, isStandalone } from '../../core/push.js';
-import { P, setSetting, refresh } from '../../core/store.js';
+import { P, setSetting, refresh, myName } from '../../core/store.js';
 import { CONFIG } from '../../config.js';
 import { G, load, findMyGroupId, createGroup, addMember, renameMember, unbindMember, setPin, newInvite, inviteLink, updateGroup } from '../shela/data.js';
 
@@ -48,6 +48,8 @@ export async function renderSettings(root, rerender) {
     <div class="actions"><button class="btn ghost sm" data-act="stAddMember">إضافة عضو</button><button class="btn ghost sm" data-act="stCurrency">العملة: ${esc(g.currency)}</button></div>`}
   </section>
   <section class="card"><div class="sh"><h2>الحساب</h2></div><p class="hint" dir="ltr" style="text-align:right">${esc(user?.email || '')}</p>
+    <div class="row2"><label class="fld"><span>اسمك</span><input id="st-myname" value="${esc(myName())}"></label><div class="fld"><span>&nbsp;</span><button class="btn ghost sm" data-act="stSaveName2">حفظ الاسم</button></div></div>
+    <div class="row2"><label class="fld"><span>كلمة سر جديدة</span><input id="st-pass" type="password" dir="ltr" autocomplete="new-password"></label><div class="fld"><span>&nbsp;</span><button class="btn ghost sm" data-act="stPass">تغيير كلمة السر</button></div></div>
     <button class="btn ghost sm" data-act="stOut">تسجيل الخروج</button></section>`;
 }
 
@@ -88,7 +90,7 @@ registerActions({
     } catch (x) { el.disabled = false; toast('الملف مش مظبوط: ' + (x.message || '')); }
   },
   stTest: () => testNotification().catch(() => toast('مقدرتش أبعت إشعار تجربة')),
-  stCreate: async el => { el.disabled = true; try { const gid = await createGroup('الشلة', 'سيد'); await load(gid); S.rerender(); } catch (x) { el.disabled = false; toast(errText(x)); } },
+  stCreate: async el => { el.disabled = true; try { const gid = await createGroup('الشلة', myName() || 'أنا'); await load(gid); S.rerender(); } catch (x) { el.disabled = false; toast(errText(x)); } },
   stNewCode: async el => { if (!confirmTap(el, 'الكود القديم هيقف. أكّد')) return; try { await newInvite(); S.rerender(); toast('اتعمل كود جديد'); } catch (x) { toast(errText(x)); } },
   stCopy: () => copyText(inviteLink()),
   stPin: el => pinSheet(el.dataset.id),
@@ -114,5 +116,7 @@ registerActions({
   stSaveMember: async () => { const n = val('st-new'); if (!n) return; try { const id = await addMember(n); S.rerender(); pinSheet(id); } catch (x) { toast(errText(x)); } },
   stCurrency: () => openSheet(`<h3>العملة</h3><input id="st-cur" value="${esc(G.group.currency)}"><div class="actions"><button class="btn primary block" data-act="stSaveCur">حفظ</button></div>`),
   stSaveCur: async () => { try { await updateGroup({ currency: val('st-cur') || 'ريال' }); closeSheet(); S.rerender(); } catch (x) { toast(errText(x)); } },
+  stSaveName2: async () => { const n = val('st-myname'); if (!n) return toast('اكتب اسمك'); try { await setSetting('profile', { ...(P.settings.profile || {}), name: n }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } },
+  stPass: async () => { const p = val('st-pass'); if (p.length < 8) return toast('8 حروف على الأقل'); const { error } = await sb.auth.updateUser({ password: p }); toast(error ? errText(error) : 'اتغيرت كلمة السر'); },
   stOut: async () => { await sb.auth.signOut(); location.hash = '#/today'; location.reload(); },
 });

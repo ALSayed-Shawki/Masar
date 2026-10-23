@@ -12,7 +12,7 @@ const STYLE = "اكتب بالعربي المصري المهني، مباشر، 
 const TASKS: Record<string, { model: string; max: number; prompt: (input: string, ctx: Record<string, unknown>) => string }> = {
   capture: {
     model: FAST, max: 1500,
-    prompt: (input, ctx) => `أنت مساعد تنظيم شخصي لسيد، استشاري Odoo ومحاسب. حوّل النص اللي تحت لعناصر منفصلة.
+    prompt: (input, ctx) => `أنت مساعد تنظيم شخصي لـ${ctx.name}. حوّل النص اللي تحت لعناصر منفصلة.
 اليوم: ${ctx.today ?? ""}. أسبوع الشغل بيبدأ السبت.
 المشاريع (استخدم الـid بالظبط أو "" لو مش واضح):
 ${ctx.projects ?? "(لا يوجد)"}
@@ -32,36 +32,36 @@ ${input}`,
   },
   review: {
     model: SMART, max: 1800,
-    prompt: (input) => `أنت مدرب عمل صريح لسيد: استشاري Odoo ومحاسب شغال في أكتر من جهة. ${STYLE}
+    prompt: (input, ctx) => `أنت مدرب عمل صريح لـ${ctx.name}. ${STYLE}
 راجع بيانات الأسبوع واكتب بالعناوين: ## الخلاصة ## اللي اتعمل كويس ## ملاحظات على أسلوب الشغل ## مخاطر ## تركيز الأسبوع الجاي (3 نقاط) ## سطر أخير.
 
 ${input}`,
   },
   suggest: {
     model: SMART, max: 1200,
-    prompt: (input) => `أنت مستشار عملي لسيد. من أفكاره وأهدافه اقترح 3 خطوات صغيرة للأسبوع ده مربوطة بأفكار مسجلة، وقول لو في فكرة تستاهل تتحول لمشروع. ${STYLE}
+    prompt: (input, ctx) => `أنت مستشار عملي لـ${ctx.name}. من أفكاره وأهدافه اقترح 3 خطوات صغيرة للأسبوع ده مربوطة بأفكار مسجلة، وقول لو في فكرة تستاهل تتحول لمشروع. ${STYLE}
 
 ${input}`,
   },
   chat: {
     model: FAST, max: 500,
-    prompt: (input, ctx) => `أنت رفيق سيد في تطبيق "مسار": صاحب جدع ودمه خفيف بالعامية المصرية، بس صادق ومش بيطبطب. هدفك تساعده يوصل لأحسن نسخة من نفسه وأحسن روتين (شغل، صلاة، دواء، نوم، فلوس، أهداف).
+    prompt: (input, ctx) => `أنت رفيق ${ctx.name} في تطبيق "مسار": صاحب جدع ودمه خفيف بالعامية المصرية، بس صادق ومش بيطبطب. هدفك تساعده يوصل لأحسن نسخة من نفسه وأحسن روتين (شغل، صلاة، دواء، نوم، فلوس، أهداف).
 رد في 1–3 جمل قصيرة. اسأل سؤال متابعة واحد لو مفيد. لو قال حاجة تستاهل تبقى مهمة أو إنجاز، اقترح يسجلها بزرار +. متخترعش معلومات.
 وضعه النهارده: ${ctx.today ?? '-'}
 المحادثة اللي فاتت:
 ${ctx.history ?? '-'}
-سيد دلوقتي: ${input}`,
+${ctx.name} دلوقتي: ${input}`,
   },
   project: {
     model: SMART, max: 1400,
-    prompt: (input, ctx) => `أنت المستشار اللي ماسك مع سيد مشروع "${ctx.project_name ?? ''}". ${STYLE}
+    prompt: (input, ctx) => `أنت المستشار اللي ماسك مع ${ctx.name} مشروع "${ctx.project_name ?? ''}". ${STYLE}
 اعتمد على الـScope والمهام والملاحظات اللي تحت بس. لو معلومة ناقصة قول إنها ناقصة واسأل عنها.
 
 ${input}`,
   },
   cv: {
     model: SMART, max: 1500,
-    prompt: (input) => `حوّل الإنجازات دي لنقاط CV احترافية بالإنجليزي ثم بالعربي، لاستشاري Odoo ERP ومحاسب. فعل قوي + ما تم + الأثر. متضيفش أرقام مش مذكورة.
+    prompt: (input) => `حوّل الإنجازات دي لنقاط CV احترافية بالإنجليزي ثم بالعربي، حسب مجال شغله في الخلفية. فعل قوي + ما تم + الأثر. متضيفش أرقام مش مذكورة.
 
 ${input}`,
   },
@@ -86,9 +86,15 @@ Deno.serve(async (req) => {
 
   // The "brain": what Sayed saved about himself (Settings → العقل المدبر), read as him (RLS).
   const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: `Bearer ${token}` } } });
-  const { data: brainRow } = await asUser.from("settings").select("value").eq("key", "brain").maybeSingle();
-  const brain = String((brainRow?.value as { text?: string } | null)?.text ?? "").slice(0, 12000);
-  const content = (brain && body.task !== "polish" ? `معلومات ثابتة عن سيد وشغله (استخدمها كخلفية، ومتكررهاش):\n${brain}\n\n---\n\n` : "") + t.prompt(body.input, body.context ?? {});
+  // Daily cap per person (AI_DAILY_LIMIT, default 100) so a shared app can't run up the bill.
+  const { data: allowed } = await asUser.rpc("bump_ai_usage", { p_limit: Number(Deno.env.get("AI_DAILY_LIMIT") ?? 100) });
+  if (allowed === false) return json({ error: "daily_limit" }, 429);
+  const { data: rows } = await asUser.from("settings").select("key,value").in("key", ["brain", "profile"]);
+  const val = (k: string) => (rows ?? []).find(r => r.key === k)?.value as Record<string, string> | undefined;
+  const brain = String(val("brain")?.text ?? "").slice(0, 12000);
+  const name = String(val("profile")?.name ?? (user.email ?? "").split("@")[0] ?? "").trim() || "صاحب الحساب";
+  const ctx = { ...(body.context ?? {}), name };
+  const content = (brain && body.task !== "polish" ? `معلومات ثابتة عن ${name} وشغله (استخدمها كخلفية، ومتكررهاش):\n${brain}\n\n---\n\n` : "") + t.prompt(body.input, ctx);
 
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

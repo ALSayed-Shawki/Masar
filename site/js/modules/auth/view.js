@@ -34,3 +34,25 @@ export function renderNotConfigured(root) {
   root.innerHTML = `<section class="card"><div class="sh"><h2>التطبيق لسه متوصلش بقاعدة البيانات</h2></div>
   <p class="hint">${esc('محتاج SUPABASE_URL و SUPABASE_ANON_KEY في js/config.js.')}</p></section>`;
 }
+
+// First sign-in: ask the person's name and a short line about their work (seeds the AI "brain").
+import { openSheet, closeSheet } from '../../core/dom.js';
+import { P, setSetting, myName } from '../../core/store.js';
+export function maybeOnboard() {
+  if (myName()) return;
+  openSheet(`<h3>أهلاً بيك في مسار</h3><p class="hint">معلومتين بس عشان التطبيق والذكاء الاصطناعي يكلموك صح.</p>
+  <label class="fld"><span>اسمك</span><input id="ob-name" placeholder="مثال: مصطفى"></label>
+  <label class="fld"><span>بتشتغل إيه؟ (سطرين، تقدر تزوّد بعدين من الإعدادات ← العقل المدبر)</span><textarea id="ob-about" rows="3" placeholder="مثال: استشاري Odoo، شغال على تنفيذ ERP لمصانع وشركات تجارية…"></textarea></label>
+  <div class="actions"><button class="btn primary block" data-act="obSave">يلا نبدأ</button></div>`);
+}
+registerActions({
+  obSave: async () => {
+    const name = val('ob-name'); if (!name) return toast('اكتب اسمك');
+    const about = val('ob-about');
+    try {
+      await setSetting('profile', { name });
+      if (about && !(P.settings.brain || {}).text) await setSetting('brain', { text: `${name}: ${about}`, updated_at: new Date().toISOString() });
+      closeSheet(); toast(`أهلاً يا ${name}`);
+    } catch (x) { toast(errText(x)); }
+  },
+});

@@ -6,7 +6,7 @@ export async function ai(task, input, context = {}) {
   if (error) {
     let code = '';
     try { code = (await error.context?.json())?.error || ''; } catch {}
-    throw new Error(code === 'ai_not_configured' ? 'مفتاح الذكاء الاصطناعي لسه متحطش على السيرفر.' : 'المساعد الذكي مش متاح دلوقتي. جرّب تاني.');
+    throw new Error(code === 'ai_not_configured' ? 'مفتاح الذكاء الاصطناعي لسه متحطش على السيرفر.' : code === 'daily_limit' ? 'خلصت حد الذكاء الاصطناعي النهارده. يتجدد بكرة.' : 'المساعد الذكي مش متاح دلوقتي. جرّب تاني.');
   }
   return data?.text || '';
 }
