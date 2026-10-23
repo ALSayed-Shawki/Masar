@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
       if (!ins?.length) continue; // already sent
 
       const payload = JSON.stringify({
-        title: kind === "due" ? `ميعاد ${med.name}` : `خدت ${med.name}؟`,
-        body: kind === "due" ? `الساعة ${t}. سجّل لما تاخده.` : `لسه متسجلش دوا الساعة ${t}.`,
+        title: kind === "due" ? `ميعاد الدواء: ${med.name}` : `خدت ${med.name}؟`,
+        body: kind === "due" ? `الساعة ${t}. سجّل لما تاخده.` : `لسه متسجلش الدواء بتاع الساعة ${t}.`,
         tag: `med-${med.id}-${t}`,
         url: "./#/today",
       });

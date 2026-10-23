@@ -33,7 +33,17 @@ with sync_playwright() as pw:
     p.click('[data-k="fajr"]'); p.wait_for_timeout(200)
     assert 'في وقتها' in p.inner_text('[data-k="fajr"]'), 'prayer did not toggle'
     shot(p, '1-owner-today')
-    p.click('[data-act="nav"][data-v="shela"]'); p.wait_for_selector('.subtabs')
+    # capture with AI → 3 items saved
+    p.click('#fab'); p.fill('#cap', 'عميل أكناف عايز تقرير، صرفت 45 غدا، فكرة باقة مخابز'); p.click('[data-act="capAI"]'); p.wait_for_selector('.capitem')
+    assert p.locator('.capitem').count() == 3, 'capture did not split into 3'
+    p.click('[data-act="capSave"]'); p.wait_for_timeout(600)
+    for tab in ['tasks', 'ledger', 'ideas', 'money']:
+        p.click(f'[data-act="nav"][data-v="{tab}"]'); p.wait_for_timeout(400); shot(p, f'tab-{tab}')
+    p.click('[data-act="nav"][data-v="ideas"]'); p.wait_for_timeout(400); assert 'باقة Odoo' in p.inner_text('#view'), 'idea missing: ' + p.inner_text('#view')[:200]
+    p.click('[data-act="nav"][data-v="money"]'); p.wait_for_timeout(300); assert '45' in p.inner_text('#view'), 'expense missing'
+    p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300); p.click('.chk >> nth=0'); p.wait_for_timeout(400)
+    p.click('[data-act="nav"][data-v="ledger"]'); p.wait_for_timeout(300); assert '1' in p.inner_text('.kpi .v >> nth=0'), 'done count not 1'
+    p.goto(BASE + 'index.html?as=owner#/shela'); p.wait_for_selector('.subtabs')
     shot(p, '2-owner-shela-balance')
     bal = p.inner_text('.hero .v'); assert '+120' in bal, f'unexpected owner balance {bal}'
     p.click('#fab'); p.fill('#x-title', 'قهوة'); p.fill('#x-amt', '30'); p.click('[data-act="shSaveExp"]'); p.wait_for_timeout(600)
@@ -41,7 +51,7 @@ with sync_playwright() as pw:
     assert 'قهوة' in p.inner_text('#view'), 'new expense not in log'
     shot(p, '3-owner-shela-log')
     p.click('[data-act="shTab"][data-v="report"]'); shot(p, '4-owner-report')
-    p.click('[data-act="nav"][data-v="settings"]'); p.wait_for_selector('.code'); shot(p, '5-owner-settings')
+    p.goto(BASE + 'index.html?as=owner#/settings'); p.wait_for_selector('.code'); shot(p, '5-owner-settings')
     # friend join
     f = page_for(b, 'friend-new'); f.goto(BASE + 'shela.html?as=none#/join/A1B2C3D4'); f.wait_for_selector('.pick')
     f.click('.pick >> nth=0'); f.fill('#j-pin', '1234'); shot(f, '6-friend-join')

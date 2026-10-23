@@ -8,6 +8,8 @@ const SHELL = [
   './js/core/dom.js', './js/core/dates.js', './js/core/supa.js', './js/core/push.js',
   './js/modules/shela/math.js', './js/modules/shela/data.js', './js/modules/shela/views.js', './js/modules/shela/report.js',
   './js/modules/today/view.js', './js/modules/settings/view.js', './js/modules/auth/view.js',
+  './js/core/store.js', './js/core/ai.js', './js/modules/tasks/view.js', './js/modules/capture/view.js',
+  './js/modules/ledger/view.js', './js/modules/ideas/view.js', './js/modules/money/view.js',
   './manifest-masar.webmanifest', './manifest-shela.webmanifest',
   './icons/masar-192.png', './icons/shela-192.png', './icons/badge-96.png',
 ];

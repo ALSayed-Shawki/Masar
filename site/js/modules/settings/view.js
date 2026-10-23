@@ -16,7 +16,7 @@ export async function renderSettings(root, rerender) {
   const g = G.group;
   root.innerHTML = `
   <section class="card"><div class="sh"><h2>الإشعارات</h2><span class="count">${pushTxt}</span></div>
-    <p class="hint">بتستخدم لتذكير الدوا بس. الصلاة محاسبة من غير تذكير.</p>
+    <p class="hint">بتستخدم لتذكير الدواء بس. الصلاة محاسبة من غير تذكير.</p>
     <div class="actions">${S.push === 'on' ? '<button class="btn ghost sm" data-act="stTest">تجربة إشعار</button>' : S.push !== 'unsupported' ? '<button class="btn primary sm" data-act="stPush">فعّل الإشعارات</button>' : ''}</div></section>
   <section class="card"><div class="sh"><h2>الشلة</h2></div>
   ${!g ? `<p class="hint">اعمل الشلة وضيف أصحابك، وكل واحد ياخد رقم سري يدخل بيه من غير حساب.</p><button class="btn primary sm" data-act="stCreate">اعمل الشلة</button>` : `

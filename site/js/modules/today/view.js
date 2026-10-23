@@ -1,48 +1,52 @@
-// Today: prayer accountability (no reminders), medication check-ins, quick links.
-import { $, esc, toast, openSheet, closeSheet, val, registerActions } from '../../core/dom.js';
-import { today, addDays, weekStart, dayDiff, nowHM, hmPlus, normHM, pd } from '../../core/dates.js';
-import { sb, errText } from '../../core/supa.js';
+// Today: week progress, focus, top 3, carried tasks, coach notes, prayers (accountability only),
+// medication check-ins and the evening mood check-in.
+import { esc, toast, openSheet, closeSheet, seg, segV, val, registerActions } from '../../core/dom.js';
+import { today, addDays, weekStart, nowHM, hmPlus, normHM, pd } from '../../core/dates.js';
+import { errText } from '../../core/supa.js';
 import { CONFIG } from '../../config.js';
+import { P, saveDay, saveWeek, update, refresh, openTasks, doneDate } from '../../core/store.js';
+import { sb } from '../../core/supa.js';
+import { taskList, byDue } from '../tasks/view.js';
 
-const PRAYERS = [['fajr', 'الفجر'], ['dhuhr', 'الظهر'], ['asr', 'العصر'], ['maghrib', 'المغرب'], ['isha', 'العشاء']];
+export const PRAYERS = [['fajr', 'الفجر'], ['dhuhr', 'الظهر'], ['asr', 'العصر'], ['maghrib', 'المغرب'], ['isha', 'العشاء']];
 const PST = { ontime: 'في وقتها', late: 'متأخرة', missed: 'فاتت' };
 const CYCLE = ['', 'ontime', 'late', 'missed'];
-const T = { days: {}, meds: [], pDay: 't', uid: null, loaded: false, rerender: () => {} };
+export const MOOD = ['', 'تعبان', 'مش أحسن حاجة', 'عادي', 'كويس', 'ممتاز'];
+const UI = { pDay: 't', rerender: () => {} };
 
 const pLabel = (k, l, d) => k === 'dhuhr' && pd(d).getDay() === 5 ? 'الجمعة' : l;
-const doses = () => T.meds.filter(m => m.active).flatMap(m => m.times.map(t => ({ id: m.id, name: m.name, t, key: `${m.id}@${t}` }))).sort((a, b) => a.t.localeCompare(b.t));
+export const doses = () => P.meds.filter(m => m.active).flatMap(m => m.times.map(t => ({ id: m.id, name: m.name, t, key: `${m.id}@${t}` }))).sort((a, b) => a.t.localeCompare(b.t));
 
-export async function loadToday() {
-  const { data: { user } } = await sb.auth.getUser(); T.uid = user.id;
-  const [d, m] = await Promise.all([
-    sb.from('day_logs').select('date,prayers,meds,qada').gte('date', addDays(today(), -365)),
-    sb.from('medications').select('*').order('created_at'),
-  ]);
-  if (d.error || m.error) throw d.error || m.error;
-  T.days = Object.fromEntries((d.data || []).map(x => [x.date, x]));
-  T.meds = m.data || []; T.loaded = true;
+export function weekStats() {
+  const td = today(), ws = weekStart(td), we = addDays(ws, 6), pws = addDays(ws, -7), pwe = addDays(ws, -1);
+  const done = P.tasks.filter(t => t.status === 'done' && doneDate(t) >= ws && doneDate(t) <= we);
+  const prev = P.tasks.filter(t => t.status === 'done' && doneDate(t) >= pws && doneDate(t) <= pwe);
+  const openDue = openTasks().filter(t => t.due && t.due <= we);
+  const pct = done.length + openDue.length ? Math.round(done.length / (done.length + openDue.length) * 100) : 0;
+  const active = new Set(P.tasks.map(doneDate).filter(Boolean));
+  Object.values(P.days).forEach(d => { if (d.mood || Object.keys(d.prayers || {}).length) active.add(d.date); });
+  let streak = 0, d = active.has(td) ? td : addDays(td, -1);
+  while (active.has(d)) { streak++; d = addDays(d, -1); }
+  return { td, ws, we, done, prev, openDue, pct, streak, doneToday: P.tasks.filter(t => doneDate(t) === td) };
 }
 
-async function saveDay(date, patch) {
-  T.days[date] = { ...(T.days[date] || { date, prayers: {}, meds: {}, qada: 0 }), ...patch };
-  T.rerender();
-  const { error } = await sb.from('day_logs').upsert({ owner_id: T.uid, date, ...patch, updated_at: new Date().toISOString() }, { onConflict: 'owner_id,date' });
-  if (error) { toast(errText(error)); await loadToday(); T.rerender(); return false; }
-  return true;
+function ring(p) {
+  const r = 26, c = 2 * Math.PI * r;
+  return `<svg viewBox="0 0 64 64" class="ring" role="img" aria-label="نسبة إنجاز الأسبوع ${p}%"><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--surface)" stroke-width="7"/><circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 32 32)"/><text x="32" y="37" text-anchor="middle" font-size="14" fill="var(--ink)" style="font-family:var(--f-num)">${p}%</text></svg>`;
 }
 
 function prayerCard() {
-  const d = T.pDay === 'y' ? addDays(today(), -1) : today(), p = T.days[d]?.prayers || {};
+  const d = UI.pDay === 'y' ? addDays(today(), -1) : today(), p = P.days[d]?.prayers || {};
   const ok = PRAYERS.filter(([k]) => p[k] === 'ontime' || p[k] === 'late').length;
-  return `<section class="card"><div class="sh"><h2>الصلاة</h2><div class="chips">${[['t', 'النهارده'], ['y', 'امبارح']].map(([k, l]) => `<button class="${T.pDay === k ? 'on' : ''}" data-act="tdDay" data-v="${k}">${l}</button>`).join('')}</div></div>
+  return `<section class="card"><div class="sh"><h2>الصلاة</h2><div class="chips">${[['t', 'النهارده'], ['y', 'امبارح']].map(([k, l]) => `<button class="${UI.pDay === k ? 'on' : ''}" data-act="tdDay" data-v="${k}">${l}</button>`).join('')}</div></div>
   <div class="prayers">${PRAYERS.map(([k, l]) => `<button class="pr ${p[k] || ''}" data-act="tdPrayer" data-k="${k}" data-d="${d}" aria-label="${pLabel(k, l, d)}: ${PST[p[k]] || 'لم تسجل'}"><b>${pLabel(k, l, d)}</b><span>${PST[p[k]] || 'سجّل'}</span></button>`).join('')}</div>
   <p class="hint">دوسة: في وقتها · التانية: متأخرة · التالتة: فاتت · الرابعة: تمسح. صليت <b class="num">${ok}</b> من 5.</p></section>`;
 }
 
 function medCard() {
-  const ds = doses(), m = T.days[today()]?.meds || {}, now = nowHM();
-  if (!ds.length) return `<section class="card"><div class="sh"><h2>الدوا</h2><button class="link" data-act="tdMeds">ضيف دواك</button></div><p class="empty">اكتب اسم الدوا ومواعيده، وهفكّرك وأسألك خدته ولا لأ.</p></section>`;
-  return `<section class="card"><div class="sh"><h2>الدوا</h2><button class="link" data-act="tdMeds">المواعيد</button></div>
+  const ds = doses(), m = P.days[today()]?.meds || {}, now = nowHM();
+  if (!ds.length) return `<section class="card"><div class="sh"><h2>الدواء</h2><button class="link" data-act="tdMeds">ضيف دواءك</button></div><p class="empty">اكتب اسم الدواء ومواعيده، وهفكّرك وأسألك خدته ولا لأ.</p></section>`;
+  return `<section class="card"><div class="sh"><h2>الدواء</h2><button class="link" data-act="tdMeds">المواعيد</button></div>
   ${ds.map(x => { const st = m[x.key];
     const q = st ? `${esc(x.name)} · <span class="num">${x.t}</span>` : now >= x.t ? `خدت ${esc(x.name)} بتاع <span class="num">${x.t}</span>؟` : `${esc(x.name)} · الساعة <span class="num">${x.t}</span>`;
     const a = st === 'taken' ? `<span class="ok">خدته</span><button class="mini" data-act="tdDose" data-k="${esc(x.key)}" data-v="">تراجع</button>`
@@ -51,55 +55,72 @@ function medCard() {
     return `<div class="dose"><span>${q}</span><span class="acts">${a}</span></div>`; }).join('')}</section>`;
 }
 
-function statsCard() {
-  const td = today(), first = Object.keys(T.days).sort()[0] || td, wsRaw = weekStart(td), ws = first > wsRaw ? first : wsRaw;
-  const days = dayDiff(td, ws) + 1, tot = days * 5;
-  let ontime = 0, late = 0, missed = 0, blank = 0;
-  for (let d = ws; d <= td; d = addDays(d, 1)) { const p = T.days[d]?.prayers || {}; PRAYERS.forEach(([k]) => { const v = p[k]; if (v === 'ontime') ontime++; else if (v === 'late') late++; else if (v === 'missed') missed++; else blank++; }); }
-  const allMissed = Object.values(T.days).reduce((s, d) => s + PRAYERS.filter(([k]) => d.prayers?.[k] === 'missed').length, 0);
-  const qada = Object.values(T.days).reduce((s, d) => s + (d.qada || 0), 0), owed = Math.max(0, allMissed - qada);
-  const md = doses(); let taken = 0;
-  for (let d = ws; d <= td; d = addDays(d, 1)) { const m = T.days[d]?.meds || {}; md.forEach(x => { if (m[x.key] === 'taken') taken++; }); }
-  const bar = (n, v, max, cls = '') => `<div class="bar"><span class="n">${n}</span><div class="track"><div class="fill ${cls}" style="width:${max ? v / max * 100 : 0}%"></div></div><span class="num">${v}${max ? '/' + max : ''}</span></div>`;
-  return `<section class="card"><div class="sh"><h2>حسابك الأسبوع ده</h2><span class="count">${ws === wsRaw ? 'من السبت' : 'من أول يوم سجّلت'}</span></div>
-  <div class="bars">${bar('في وقتها', ontime, tot)}${bar('متأخرة', late, 0, 'gold')}${bar('فاتت', missed, 0, 'neg')}${md.length ? bar('الدوا', taken, md.length * days) : ''}</div>
-  ${blank ? `<p class="hint">${blank} فرض لسه متسجلش.</p>` : ''}
-  <div class="row"><b>عليك قضاء <span class="num">${owed}</span></b><button class="mini" data-act="tdQada" ${owed ? '' : 'disabled'}>قضيت فرض</button><small>الفروض اللي فاتت في آخر سنة ناقص اللي قضيته</small></div></section>`;
-}
-
 export function renderToday(root, rerender) {
-  T.rerender = rerender;
-  $('#fab').hidden = true;
-  if (!T.loaded) { root.innerHTML = '<section class="card"><div class="skel"></div><div class="skel" style="width:70%"></div></section>'; loadToday().then(rerender).catch(e => { root.innerHTML = `<section class="card"><p class="empty">${esc(errText(e))}</p></section>`; }); return; }
-  const td = today(), h = new Date().getHours();
-  const yp = T.days[addDays(td, -1)]?.prayers || {}, ym = PRAYERS.filter(([k]) => yp[k] === 'missed').length;
-  const lateDoses = doses().filter(x => !(T.days[td]?.meds || {})[x.key] && nowHM() >= hmPlus(x.t, 60));
+  UI.rerender = rerender;
+  const st = weekStats(), td = st.td, open = openTasks();
+  const h = new Date().getHours(), greet = h < 12 ? 'صباح الخير يا سيد' : h < 17 ? 'يومك ماشي إزاي يا سيد؟' : 'مساء الخير يا سيد';
+  const diff = st.done.length - st.prev.length;
+  const line = st.done.length ? `أنجزت <b class="num">${st.done.length}</b> مهمة الأسبوع ده${st.prev.length ? (diff >= 0 ? `، أكتر من اللي فات بـ <b class="num">${diff}</b>` : `، أقل من اللي فات بـ <b class="num">${-diff}</b>`) : ''}.` : 'الأسبوع لسه بادئ. أول مهمة تخلصها هتفتح العداد.';
+  const focus = P.tasks.filter(t => t.focus_date === td).sort((a, b) => (a.status === 'done') - (b.status === 'done'));
+  const dueToday = open.filter(t => t.due === td && t.focus_date !== td).sort(byDue);
+  const carried = open.filter(t => t.due && t.due < td).sort(byDue);
+  const inbox = open.filter(t => !t.due).length;
+  const wk = (P.weeks[st.ws]?.focus || []).filter(Boolean), day = P.days[td];
+
   const notes = [];
-  if (lateDoses.length) notes.push(`لسه مسجلتش دوا ${lateDoses.map(x => x.t).join(' و')}. خدته؟`);
-  if (ym) notes.push(`فاتك ${ym} ${ym > 1 ? 'فروض' : 'فرض'} امبارح. اقضيهم النهارده قبل ما يتراكموا.`);
+  const lateDoses = doses().filter(x => !(day?.meds || {})[x.key] && nowHM() >= hmPlus(x.t, 60));
+  if (lateDoses.length) notes.push(`لسه مسجلتش الدواء بتاع ${lateDoses.map(x => x.t).join(' و')}. خدته؟`);
+  const yp = P.days[addDays(td, -1)]?.prayers || {}, ym = PRAYERS.filter(([k]) => yp[k] === 'missed').length;
+  if (ym) notes.push(`فاتك ${ym} ${ym > 1 ? 'فروض' : 'فرض'} امبارح. اقضيهم النهارده، وسجّل القضاء من الميزان.`);
+  open.filter(t => (t.rolled || 0) >= 3).slice(0, 2).forEach(t => notes.push(`«${esc(t.title)}» اترحّلت ${t.rolled} مرات. قسّمها لخطوة أصغر أو خد قرار تلغيها.`));
+  const noDod = open.filter(t => !t.dod && (t.priority || 1) >= 2).length;
+  if (noDod) notes.push(`${noDod} مهام مهمة من غير تعريف إنجاز. من غيره مش هتعرف امتى خلصت.`);
+  const projs = new Set(st.doneToday.map(t => t.project_id).filter(Boolean));
+  if (projs.size >= 4) notes.push(`اشتغلت النهارده على ${projs.size} مشاريع. التنقل الكتير بياكل التركيز؛ جمّع شغل كل مشروع في بلوك واحد.`);
+  if (inbox > 10) notes.push(`عندك ${inbox} مهمة من غير موعد. خصص 10 دقايق تفرزها: موعد، تفويض، أو حذف.`);
+
   root.innerHTML = `
-  <section class="card soft"><h1 class="big">${h < 12 ? 'صباح الخير يا سيد' : h < 17 ? 'يومك ماشي إزاي يا سيد؟' : 'مساء الخير يا سيد'}</h1></section>
-  ${notes.length ? `<section class="card warn"><ul style="margin:0;padding-inline-start:18px">${notes.map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}
+  <section class="card soft hero-grid"><div><h1 class="big">${greet}</h1><p style="margin:4px 0 0;font-size:14px">${line}</p>
+    <span class="streak">سلسلة الأيام المنظمة <b class="num">${st.streak}</b> يوم</span></div>${ring(st.pct)}</section>
+  ${notes.length ? `<section class="card warn"><div class="sh"><h2>انتبه</h2></div><ul class="coach">${notes.slice(0, 4).map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}
+  <section class="card"><div class="sh"><h2>أهم 3 النهارده</h2><span class="count num">${focus.filter(t => t.status === 'done').length}/${focus.length || 3}</span></div>
+    ${focus.length ? taskList(focus) : '<p class="empty">دوس النجمة ★ جنب أي مهمة عشان تختارها من أهم 3.</p>'}</section>
   ${prayerCard()}
   ${medCard()}
-  ${statsCard()}
-  <a class="card linkcard" href="#/shela"><span><b>حساب الشلة</b><br><span class="hint">مين عليه ومين ليه</span></span><span class="go">افتح</span></a>
-  ${CONFIG.LEGACY_URL ? `<a class="card linkcard" href="${esc(CONFIG.LEGACY_URL)}" target="_blank" rel="noopener"><span><b>المهام والأهداف</b><br><span class="hint">لسه على نسخة Claude لحد ما ننقلها هنا</span></span><span class="go">افتح</span></a>` : ''}`;
+  ${dueToday.length ? `<section class="card"><div class="sh"><h2>مستحقة النهارده</h2><span class="count num">${dueToday.length}</span></div>${taskList(dueToday)}</section>` : ''}
+  ${carried.length ? `<section class="card"><div class="sh"><h2>مترحّلة من أيام فاتت</h2><button class="link" data-act="tdCarryAll">انقل الكل للنهارده</button></div>${taskList(carried.slice(0, 8))}${carried.length > 8 ? `<p class="hint">و${carried.length - 8} كمان في المهام.</p>` : ''}</section>` : ''}
+  <section class="card"><div class="sh"><h2>تركيز الأسبوع</h2><button class="link" data-act="tdWeek">${wk.length ? 'تعديل' : 'حدّده'}</button></div>
+    ${wk.length ? `<ul class="coach">${wk.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : '<p class="empty">اختار من هدف لتلاتة يبقوا محور الأسبوع. لو حصل طارئ غيّرهم بوعي.</p>'}</section>
+  <section class="card"><div class="sh"><h2>تسجيل اليوم</h2><button class="link" data-act="tdCheckin">${day?.mood ? 'تعديل' : 'سجّل'}</button></div>
+    ${day?.mood ? `<p style="margin:0">المزاج <b class="num">${day.mood}/5</b> (${MOOD[day.mood] || ''}) · الطاقة <b class="num">${day.energy}/5</b>${day.word ? ` · «${esc(day.word)}»` : ''}</p>${day.highlight ? `<p class="hint">${esc(day.highlight)}</p>` : ''}` : '<p class="empty">آخر اليوم: مزاجك وطاقتك من 1 لـ5 وكلمة تلخص اليوم. دقيقة واحدة.</p>'}</section>
+  ${inbox ? `<a class="card linkcard" href="#/tasks"><span><b>الـInbox</b><br><span class="hint">${inbox} مهمة من غير موعد</span></span><span class="go">افرزها</span></a>` : ''}
+  <a class="card linkcard" href="#/shela"><span><b>حساب الشلة</b><br><span class="hint">مين عليه ومين ليه</span></span><span class="go">افتح</span></a>`;
 }
 
 registerActions({
-  tdDay: el => { T.pDay = el.dataset.v; T.rerender(); },
-  tdPrayer: el => { const d = el.dataset.d, k = el.dataset.k, p = { ...(T.days[d]?.prayers || {}) }; const nx = CYCLE[(CYCLE.indexOf(p[k] || '') + 1) % CYCLE.length]; if (nx) p[k] = nx; else delete p[k]; saveDay(d, { prayers: p }); },
-  tdDose: async el => { const td = today(), m = { ...(T.days[td]?.meds || {}) }; if (el.dataset.v) m[el.dataset.k] = el.dataset.v; else delete m[el.dataset.k]; if (await saveDay(td, { meds: m }) && el.dataset.v === 'taken') toast('تمام، اتسجل'); },
-  tdQada: async () => { const td = today(); if (await saveDay(td, { qada: (T.days[td]?.qada || 0) + 1 })) toast('تقبّل الله'); },
-  tdMeds: () => {
-    const it = T.meds.filter(m => m.active);
-    openSheet(`<h3>الدوا ومواعيده</h3><p class="hint">المواعيد بصيغة 24 ساعة ومفصولة بفاصلة، مثال: 09:00, 21:00. هيوصلك إشعار في الميعاد، وتاني بعد ساعة لو مسجلتش.</p>
-    ${[0, 1, 2, 3].map(i => `<div class="row2"><label class="fld"><span>الدوا ${i + 1}</span><input id="md-n-${i}" value="${esc(it[i]?.name || '')}"></label><label class="fld"><span>المواعيد</span><input id="md-t-${i}" dir="ltr" value="${esc((it[i]?.times || []).join(', '))}" placeholder="09:00"></label></div>`).join('')}
-    <div class="actions"><button class="btn primary block" data-act="tdSaveMeds">حفظ</button></div>`);
-  },
+  tdDay: el => { UI.pDay = el.dataset.v; UI.rerender(); },
+  tdPrayer: el => { const d = el.dataset.d, k = el.dataset.k, p = { ...(P.days[d]?.prayers || {}) }; const nx = CYCLE[(CYCLE.indexOf(p[k] || '') + 1) % CYCLE.length]; if (nx) p[k] = nx; else delete p[k]; saveDay(d, { prayers: p }).catch(x => toast(errText(x))); },
+  tdDose: el => { const td = today(), m = { ...(P.days[td]?.meds || {}) }; if (el.dataset.v) m[el.dataset.k] = el.dataset.v; else delete m[el.dataset.k]; saveDay(td, { meds: m }).then(() => { if (el.dataset.v === 'taken') toast('تمام، اتسجل'); }).catch(x => toast(errText(x))); },
+  tdCarryAll: async () => { const td = today(); try { for (const t of openTasks().filter(t => t.due && t.due < td)) await sb.from('tasks').update({ due: td, rolled: (t.rolled || 0) + 1 }).eq('id', t.id); await refresh('tasks'); toast('اتنقلوا للنهارده'); } catch (x) { toast(errText(x)); } },
+  tdWeek: () => { const ws = weekStart(today()), f = P.weeks[ws]?.focus || [];
+    openSheet(`<h3>تركيز الأسبوع</h3><p class="hint">من هدف لتلاتة بس. الباقي يستنى.</p>${[0, 1, 2].map(i => `<input id="w-${i}" value="${esc(f[i] || '')}" placeholder="${['مثال: تسليم موديول تقارير الأهرام', 'مثال: ديمو الارتكاز الماسي', 'مثال: قرار CMA'][i]}">`).join('')}
+    <div class="actions"><button class="btn primary block" data-act="tdSaveWeek">حفظ</button></div>`); },
+  tdSaveWeek: async () => { try { await saveWeek(weekStart(today()), { focus: [0, 1, 2].map(i => val('w-' + i)).filter(Boolean) }); closeSheet(); toast('تركيز الأسبوع اتحدد'); } catch (x) { toast(errText(x)); } },
+  tdCheckin: () => { const d = P.days[today()] || {};
+    openSheet(`<h3>تسجيل اليوم</h3>
+    <div class="fld"><span>المزاج</span>${seg('d-mood', [1, 2, 3, 4, 5].map(n => [n, `${n} ${MOOD[n]}`]), d.mood || '')}</div>
+    <div class="fld"><span>الطاقة</span>${seg('d-energy', [1, 2, 3, 4, 5].map(n => [n, n]), d.energy || '')}</div>
+    <label class="fld"><span>كلمة تلخص اليوم</span><input id="d-word" value="${esc(d.word || '')}" maxlength="40"></label>
+    <label class="fld"><span>أحسن حاجة حصلت النهارده (اختياري)</span><textarea id="d-hl" rows="2">${esc(d.highlight || '')}</textarea></label>
+    <div class="actions"><button class="btn primary block" data-act="tdSaveCheckin">حفظ</button></div>`); },
+  tdSaveCheckin: async () => { const mood = +segV('d-mood'), energy = +segV('d-energy'); if (!mood || !energy) return toast('اختار المزاج والطاقة');
+    try { await saveDay(today(), { mood, energy, word: val('d-word'), highlight: val('d-hl') }); closeSheet(); toast('تسجيل اليوم اتحفظ'); } catch (x) { toast(errText(x)); } },
+  tdMeds: () => { const it = P.meds.filter(m => m.active);
+    openSheet(`<h3>الدواء ومواعيده</h3><p class="hint">المواعيد بصيغة 24 ساعة ومفصولة بفاصلة، مثال: 09:00, 21:00. هيوصلك إشعار في الميعاد، وتاني بعد ساعة لو مسجلتش.</p>
+    ${[0, 1, 2, 3].map(i => `<div class="row2"><label class="fld"><span>الدواء ${i + 1}</span><input id="md-n-${i}" value="${esc(it[i]?.name || '')}"></label><label class="fld"><span>المواعيد</span><input id="md-t-${i}" dir="ltr" value="${esc((it[i]?.times || []).join(', '))}" placeholder="09:00"></label></div>`).join('')}
+    <div class="actions"><button class="btn primary block" data-act="tdSaveMeds">حفظ</button></div>`); },
   tdSaveMeds: async el => {
-    const old = T.meds.filter(m => m.active), rows = [];
+    const old = P.meds.filter(m => m.active), rows = [];
     for (const i of [0, 1, 2, 3]) {
       const name = val('md-n-' + i); if (!name) continue;
       const times = val('md-t-' + i).split(/[,،\s]+/).filter(Boolean).map(normHM);
@@ -115,7 +136,7 @@ registerActions({
       }
       const keep = new Set(rows.map(r => r.id).filter(Boolean));
       for (const m of old) if (!keep.has(m.id)) { const { error } = await sb.from('medications').update({ active: false }).eq('id', m.id); if (error) throw error; }
-      await loadToday(); closeSheet(); T.rerender(); toast('اتحفظت المواعيد');
+      await refresh('meds'); closeSheet(); toast('اتحفظت المواعيد');
     } catch (x) { el.disabled = false; toast(errText(x)); }
   },
 });

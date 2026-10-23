@@ -15,6 +15,7 @@ const T = (window.__DB = window.__DB || {
     { id: 'e2', group_id: 'g1', title: 'بقالة', amount_c: 9000, date: '2026-10-21', payer_id: 'm-a', split_type: 'one', participants: ['m-g'], weights: {}, amounts: {}, category: 'بقالة وبيت', note: '', created_by: FRIEND, created_by_member: 'm-a', created_at: '2026-10-21T20:00:00Z', deleted: false },
   ],
   settlements: [],
+  projects: [], tasks: [], notes: [], wins: [], money_entries: [], goals: [], weeks: [], settings: [],
   day_logs: [], medications: [{ id: 'med1', owner_id: OWNER, name: 'فيتامين د', times: ['09:00', '21:00'], timezone: 'Asia/Riyadh', active: true, created_at: '2026-10-01' }],
   push_subscriptions: [],
 });
@@ -24,6 +25,7 @@ class Q {
   select() { return this; } order() { return this; } limit() { return this; }
   eq(k, v) { this.f.push(r => r[k] === v); return this; }
   gte(k, v) { this.f.push(r => r[k] >= v); return this; }
+  or(expr) { const parts = expr.split(','); this.f.push(r => parts.some(p => { const [k, op, ...v] = p.split('.'); const val = v.join('.'); return op === 'eq' ? r[k] === val : op === 'gte' ? (r[k] || '') >= val : false; })); return this; }
   single() { this.one = true; return this; } maybeSingle() { this.maybe = true; return this; }
   insert(p) { this.op = 'insert'; this.payload = p; return this; }
   update(p) { this.op = 'update'; this.payload = p; return this; }
@@ -32,9 +34,14 @@ class Q {
   then(ok, bad) { return Promise.resolve(this.run()).then(ok, bad); }
   run() {
     const rows = T[this.t] || (T[this.t] = []);
-    if (this.op === 'insert') { const r = { id: 'x' + (n++), created_at: new Date().toISOString(), owner_id: uid, deleted: false, ...this.payload }; rows.push(r); return { data: this.one ? r : [r], error: null }; }
+    if (this.op === 'insert') {
+      const add = p => { const r = { id: 'x' + (n++), created_at: new Date().toISOString(), owner_id: uid, deleted: false, status: 'todo', active: true, rolled: 0, priority: 1, progress: 0, dod: '', ...p }; rows.push(r); return r; };
+      const out = Array.isArray(this.payload) ? this.payload.map(add) : add(this.payload);
+      return { data: this.one ? out : [].concat(out), error: null };
+    }
+    if (this.op === 'delete') { const keep = rows.filter(r => !this.f.every(f => f(r))); rows.length = 0; rows.push(...keep); return { data: null, error: null }; }
     if (this.op === 'upsert') {
-      const p = this.payload, i = rows.findIndex(r => (this.t === 'day_logs' ? r.date === p.date : r.endpoint === p.endpoint));
+      const p = this.payload, key = { day_logs: 'date', weeks: 'start', settings: 'key' }[this.t] || 'endpoint', i = rows.findIndex(r => r[key] === p[key]);
       if (i >= 0) Object.assign(rows[i], p); else rows.push({ ...p }); return { data: null, error: null };
     }
     const hit = rows.filter(r => this.f.every(f => f(r)));
@@ -63,6 +70,12 @@ export function createClient() {
     channel: () => ({ on() { return this; }, subscribe() { return this; } }),
     removeChannel() {},
     storage: { from: () => ({ upload: async () => ({ error: null }), createSignedUrl: async () => ({ data: { signedUrl: 'about:blank' }, error: null }) }) },
-    functions: { invoke: async () => ({ data: { publicKey: 'x' }, error: null }) },
+    functions: { invoke: async (name, o) => {
+      if (name !== 'ai') return { data: { publicKey: 'x' }, error: null };
+      const t = o.body.task;
+      const text = t === 'capture' ? JSON.stringify([{ kind: 'task', title: 'تجهيز تقرير أعمار الديون لعميل أكناف', dod: 'التقرير متسلم', due: '', priority: 2 }, { kind: 'expense', title: 'غدا', amount: 45, currency: 'SAR', category: 'أكل وبيت' }, { kind: 'idea', title: 'باقة Odoo جاهزة للمخابز' }])
+        : t === 'polish' ? JSON.stringify({ title: 'مراجعة تقرير المبيعات', dod: 'اتبعت للعميل', note: '' }) : '## الخلاصة\n- أسبوع كويس';
+      return { data: { text }, error: null };
+    } },
   };
 }

@@ -1,5 +1,5 @@
 // Masar app shell. Two installable faces from one codebase:
-//   index.html → "مسار"       (owner: today, group, settings)
+//   index.html → "مسار"       (owner: today, tasks, ledger, ideas, money, group, settings)
 //   shela.html → "حساب الشلة" (friends: group only, join with code + PIN)
 // New features plug in as modules: add a route here and a tab entry below.
 import { $, actions, closeSheet, sheetOpen } from './core/dom.js';
@@ -7,7 +7,13 @@ import { configured, sb, getSession, isAnon, errText } from './core/supa.js';
 import { fmtDay, today } from './core/dates.js';
 import { renderLogin, renderNotConfigured } from './modules/auth/view.js';
 import { renderToday } from './modules/today/view.js';
+import { renderTasks } from './modules/tasks/view.js';
+import { renderLedger } from './modules/ledger/view.js';
+import { renderIdeas } from './modules/ideas/view.js';
+import { renderMoney } from './modules/money/view.js';
+import { openCapture } from './modules/capture/view.js';
 import { renderSettings } from './modules/settings/view.js';
+import { P, loadAll, onP } from './core/store.js';
 import { renderShela, renderJoin } from './modules/shela/views.js';
 import { G, load, subscribe, findMyGroupId, onChange } from './modules/shela/data.js';
 
@@ -18,8 +24,13 @@ const ICONS = {
   today: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></svg>',
   shela: '<svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="9" r="4"/><circle cx="12" cy="15" r="4"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/></svg>',
+  ledger: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  ideas: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg>',
+  money: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M16 15h2"/></svg>',
 };
-const TABS = [['today', 'اليوم'], ['shela', 'الشلة'], ['settings', 'الإعدادات']];
+const TABS = [['today', 'اليوم'], ['tasks', 'المهام'], ['ledger', 'الميزان'], ['ideas', 'الأفكار'], ['money', 'الماليات']];
+const PAGES = { today: renderToday, tasks: renderTasks, ledger: renderLedger, ideas: renderIdeas, money: renderMoney, settings: renderSettings };
 
 let session = null;
 const route = () => (location.hash.replace(/^#\/?/, '') || (MODE === 'shela' ? 'shela' : 'today')).split('/');
@@ -37,10 +48,11 @@ async function ensureGroup() {
   return true;
 }
 
-let rendering = false;
+let rendering = false, again = false;
 async function render() {
-  if (rendering) return; rendering = true;
-  try { await renderInner(); }
+  if (rendering) { again = true; return; }
+  rendering = true;
+  try { do { again = false; await renderInner(); } while (again); }
   catch (e) { view.innerHTML = `<section class="card"><p class="empty">${errText(e)}</p><button class="btn ghost sm" data-act="reload">حاول تاني</button></section>`; }
   finally { rendering = false; }
 }
@@ -62,19 +74,22 @@ async function renderInner() {
 
   // owner app
   if (!session || isAnon(session)) { setTabs(false); $('#fab').hidden = true; return renderLogin(view, async () => { session = await getSession(); location.hash = '#/today'; render(); }); }
-  setTabs(true, page);
+  setTabs(true, page === 'shela' ? 'money' : page);
+  $('#top-right').innerHTML = `<button class="who" data-act="nav" data-v="settings" aria-label="الإعدادات">${ICONS.settings.replace('<svg', '<svg width="18" height="18" style="vertical-align:-4px;fill:none;stroke:currentColor;stroke-width:1.8"')}</button>`;
   if (page === 'shela') {
-    if (!(await ensureGroup())) { view.innerHTML = '<section class="card"><p class="empty">لسه معملتش الشلة.</p><a class="btn primary sm" href="#/settings">اعملها من الإعدادات</a></section>'; return; }
+    if (!(await ensureGroup())) { view.innerHTML = '<section class="card"><p class="empty">لسه معملتش الشلة.</p><a class="btn primary sm" href="#/settings">اعملها من الإعدادات</a></section>'; $('#fab').hidden = true; return; }
     return renderShela(view, render);
   }
-  if (page === 'settings') return renderSettings(view, render);
-  return renderToday(view, render);
+  const fab = $('#fab'); fab.hidden = page === 'settings'; fab.textContent = '+'; fab.dataset.act = 'capture'; fab.classList.add('round');
+  if (!P.loaded) { view.innerHTML = '<section class="card"><div class="skel"></div><div class="skel" style="width:70%"></div></section>'; await loadAll(); }
+  return (PAGES[page] || renderToday)(view, render);
 }
 
 // one click handler for the whole app
 document.addEventListener('click', ev => {
   const el = ev.target.closest('[data-act]'); if (!el) return;
-  if (el.dataset.act === 'nav') { location.hash = '#/' + el.dataset.v; return; }
+  if (el.dataset.act === 'nav') { if (location.hash === '#/' + el.dataset.v) render(); else location.hash = '#/' + el.dataset.v; return; }
+  if (el.dataset.act === 'capture') { openCapture(); return; }
   if (el.dataset.act === 'reload') { location.reload(); return; }
   const f = actions[el.dataset.act];
   if (f) { ev.preventDefault(); f(el); }
@@ -83,6 +98,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen(
 addEventListener('hashchange', () => { if (sheetOpen()) closeSheet(); render(); scrollTo(0, 0); });
 let pending = false;
 onChange(() => { const [p] = route(); if (MODE === 'shela' || p === 'shela') { if (sheetOpen()) pending = true; else render(); } });
+onP(() => { const [p] = route(); if (MODE === 'masar' && p !== 'shela' && p !== 'settings') { if (sheetOpen()) pending = true; else render(); } });
 document.addEventListener('sheetclosed', () => { if (pending) { pending = false; render(); } });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
