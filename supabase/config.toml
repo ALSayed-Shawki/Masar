@@ -8,7 +8,7 @@ verify_jwt = true
 verify_jwt = false
 
 # called by Supabase Cron with the x-cron-secret header
-[functions.med-reminders]
+[functions.reminders]
 verify_jwt = false
 
 

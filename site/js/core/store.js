@@ -3,7 +3,7 @@
 import { sb } from './supa.js';
 import { addDays, today, ymd } from './dates.js';
 
-export const P = { uid: null, tasks: [], projects: [], notes: [], wins: [], money: [], days: {}, goals: [], weeks: {}, settings: {}, meds: [], loaded: false };
+export const P = { uid: null, chat: [], tasks: [], projects: [], notes: [], wins: [], money: [], days: {}, goals: [], weeks: {}, settings: {}, meds: [], loaded: false };
 const listeners = new Set();
 export const onP = fn => { listeners.add(fn); return () => listeners.delete(fn); };
 const emit = () => listeners.forEach(f => f());
@@ -32,13 +32,14 @@ const Q = {
   weeks: () => sb.from('weeks').select('*').gte('start', addDays(today(), -120)),
   settings: () => sb.from('settings').select('*'),
   meds: () => sb.from('medications').select('*').order('created_at'),
+  chat: () => sb.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(60),
 };
 const SHAPE = {
   days: a => Object.fromEntries(a.map(x => [x.date, x])),
   weeks: a => Object.fromEntries(a.map(x => [x.start, x])),
   settings: a => Object.fromEntries(a.map(x => [x.key, x.value])),
 };
-const TABLE = { tasks: 'tasks', projects: 'projects', notes: 'notes', wins: 'wins', money: 'money_entries', days: 'day_logs', goals: 'goals', weeks: 'weeks', settings: 'settings', meds: 'medications' };
+const TABLE = { tasks: 'tasks', projects: 'projects', notes: 'notes', wins: 'wins', money: 'money_entries', days: 'day_logs', goals: 'goals', weeks: 'weeks', settings: 'settings', meds: 'medications', chat: 'chat_messages' };
 
 async function fetchKey(k) {
   const { data, error } = await Q[k]();

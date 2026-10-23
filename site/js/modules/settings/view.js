@@ -2,6 +2,8 @@
 import { $, esc, toast, openSheet, closeSheet, val, registerActions, confirmTap, copyText, waLink } from '../../core/dom.js';
 import { sb, errText } from '../../core/supa.js';
 import { pushState, enablePush, testNotification, isIOS, isStandalone } from '../../core/push.js';
+import { P, setSetting } from '../../core/store.js';
+import { CONFIG } from '../../config.js';
 import { G, load, findMyGroupId, createGroup, addMember, renameMember, unbindMember, setPin, newInvite, inviteLink, updateGroup } from '../shela/data.js';
 
 const S = { push: '…', rerender: () => {} };
@@ -16,8 +18,15 @@ export async function renderSettings(root, rerender) {
   const g = G.group;
   root.innerHTML = `
   <section class="card"><div class="sh"><h2>الإشعارات</h2><span class="count">${pushTxt}</span></div>
-    <p class="hint">بتستخدم لتذكير الدواء بس. الصلاة محاسبة من غير تذكير.</p>
+    <p class="hint">للدواء، والأذكار، وأسئلة رفيقك. الصلاة محاسبة من غير تذكير.</p>
     <div class="actions">${S.push === 'on' ? '<button class="btn ghost sm" data-act="stTest">تجربة إشعار</button>' : S.push !== 'unsupported' ? '<button class="btn primary sm" data-act="stPush">فعّل الإشعارات</button>' : ''}</div></section>
+  ${(() => { const n = P.settings.nudges || {}; return `<section class="card"><div class="sh"><h2>رفيقك (أسئلة الذكاء الاصطناعي)</h2></div>
+    <p class="hint">إشعارات قصيرة رخمة: عامل إيه؟ عملت إيه النهارده؟ ردودك بتتحفظ وبيبني عليها.</p>
+    <label class="checkrow"><input type="checkbox" id="nd-on" ${n.enabled ? 'checked' : ''}><span>شغّال</span></label>
+    <div class="row2"><label class="fld"><span>كل كام ساعة</span><select id="nd-every">${[2, 3, 4, 5].map(h => `<option value="${h}" ${(n.every || 3) === h ? 'selected' : ''}>كل ${h} ساعات</option>`).join('')}</select></label><span></span></div>
+    <div class="row2"><label class="fld"><span>من الساعة</span><input type="time" id="nd-from" value="${n.from || '10:00'}"></label><label class="fld"><span>لحد الساعة</span><input type="time" id="nd-to" value="${n.to || '23:00'}"></label></div>
+    <div class="actions"><button class="btn primary sm" data-act="stNudges">حفظ</button><a class="btn ghost sm" href="#/chat">افتح المحادثة</a></div></section>`; })()}
+  <a class="card linkcard" href="#/azkar"><span><b>الأذكار</b><br><span class="hint">اختيار أذكار الصبح والليل ومواعيدها</span></span><span class="go">افتح</span></a>
   <section class="card"><div class="sh"><h2>الشلة</h2></div>
   ${!g ? `<p class="hint">اعمل الشلة وضيف أصحابك، وكل واحد ياخد رقم سري يدخل بيه من غير حساب.</p><button class="btn primary sm" data-act="stCreate">اعمل الشلة</button>` : `
     <div class="row"><span>كود الدخول <span class="code">${esc(g.invite_code)}</span></span><button class="mini" data-act="stNewCode">كود جديد</button></div>
@@ -39,6 +48,7 @@ function pinSheet(memberId) {
 
 registerActions({
   stPush: async el => { el.disabled = true; try { await enablePush(); toast('الإشعارات اشتغلت'); } catch (x) { toast(x.message || errText(x)); } S.rerender(); },
+  stNudges: async el => { el.disabled = true; try { await setSetting('nudges', { enabled: document.getElementById('nd-on').checked, every: +val('nd-every') || 3, from: val('nd-from') || '10:00', to: val('nd-to') || '23:00', tz: CONFIG.TIMEZONE }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } el.disabled = false; },
   stTest: () => testNotification().catch(() => toast('مقدرتش أبعت إشعار تجربة')),
   stCreate: async el => { el.disabled = true; try { const gid = await createGroup('الشلة', 'سيد'); await load(gid); S.rerender(); } catch (x) { el.disabled = false; toast(errText(x)); } },
   stNewCode: async el => { if (!confirmTap(el, 'الكود القديم هيقف. أكّد')) return; try { await newInvite(); S.rerender(); toast('اتعمل كود جديد'); } catch (x) { toast(errText(x)); } },

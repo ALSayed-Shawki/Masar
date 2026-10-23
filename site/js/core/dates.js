@@ -13,3 +13,6 @@ export const fmtMonth = s => pd(s).toLocaleDateString(LOC, { month: 'long', year
 export const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 export const hmPlus = (t, min) => { const [h, m] = t.split(':').map(Number); const x = h * 60 + m + min; return pad(Math.floor(x / 60) % 24) + ':' + pad(x % 60); };
 export const normHM = t => { const m = String(t).trim().match(/^(\d{1,2})(?::(\d{2}))?$/); if (!m || +m[1] > 23 || +(m[2] || 0) > 59) return null; return pad(+m[1]) + ':' + (m[2] || '00'); };
+export const fmtWeekday = s => pd(s).toLocaleDateString(LOC, { weekday: 'long' });
+export const fmtFull = s => pd(s).toLocaleDateString(LOC, { day: 'numeric', month: 'long', year: 'numeric' });
+export const fmtHijri = s => { try { return pd(s).toLocaleDateString('ar-SA-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return ''; } };

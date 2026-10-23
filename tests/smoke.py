@@ -43,6 +43,14 @@ with sync_playwright() as pw:
     p.click('[data-act="nav"][data-v="money"]'); p.wait_for_timeout(300); assert '45' in p.inner_text('#view'), 'expense missing'
     p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300); p.click('.chk >> nth=0'); p.wait_for_timeout(400)
     p.click('[data-act="nav"][data-v="ledger"]'); p.wait_for_timeout(300); assert '1' in p.inner_text('.kpi .v >> nth=0'), 'done count not 1'
+    # azkar: settings page, reader advances on tap and finishes
+    p.goto(BASE + 'index.html?as=owner#/azkar'); p.wait_for_selector('#az-t-morning'); shot(p, 'azkar-settings')
+    p.goto(BASE + 'index.html?as=owner#/azkar/morning'); p.wait_for_selector('.zikr'); shot(p, 'azkar-reader')
+    first = p.inner_text('.ztext'); p.click('.zikr'); p.wait_for_timeout(200); assert p.inner_text('.ztext') != first, 'zikr did not advance'
+    # companion chat
+    p.goto(BASE + 'index.html?as=owner#/chat'); p.wait_for_selector('#chat-in'); p.fill('#chat-in', 'خلصت التقرير الحمد لله'); p.click('[data-act="chSend"]'); p.wait_for_timeout(700)
+    assert 'كمّل كده' in p.inner_text('.chat'), 'no AI reply in chat'; shot(p, 'chat')
+    p.goto(BASE + 'index.html?as=owner#/today'); p.wait_for_selector('.datebar'); p.click('[data-act="tdMeds"]'); p.wait_for_selector('.md-t'); shot(p, 'meds-sheet'); p.click('.sheet .x')
     p.goto(BASE + 'index.html?as=owner#/shela'); p.wait_for_selector('.subtabs')
     shot(p, '2-owner-shela-balance')
     bal = p.inner_text('.hero .v'); assert '+120' in bal, f'unexpected owner balance {bal}'

@@ -1,7 +1,9 @@
 // Today: week progress, focus, top 3, carried tasks, coach notes, prayers (accountability only),
 // medication check-ins and the evening mood check-in.
 import { esc, toast, openSheet, closeSheet, seg, segV, val, registerActions } from '../../core/dom.js';
-import { today, addDays, weekStart, nowHM, hmPlus, normHM, pd } from '../../core/dates.js';
+import { today, addDays, weekStart, nowHM, hmPlus, normHM, pd, fmtWeekday, fmtFull, fmtHijri } from '../../core/dates.js';
+import { azkarCard } from '../azkar/view.js';
+import { lastNudge } from '../chat/view.js';
 import { errText } from '../../core/supa.js';
 import { CONFIG } from '../../config.js';
 import { P, saveDay, saveWeek, update, refresh, openTasks, doneDate } from '../../core/store.js';
@@ -79,13 +81,17 @@ export function renderToday(root, rerender) {
   if (projs.size >= 4) notes.push(`اشتغلت النهارده على ${projs.size} مشاريع. التنقل الكتير بياكل التركيز؛ جمّع شغل كل مشروع في بلوك واحد.`);
   if (inbox > 10) notes.push(`عندك ${inbox} مهمة من غير موعد. خصص 10 دقايق تفرزها: موعد، تفويض، أو حذف.`);
 
+  const nudge = lastNudge();
   root.innerHTML = `
+  <section class="datebar"><span class="wd">النهارده ${fmtWeekday(td)}</span><span>${fmtFull(td)}</span><span class="hint">${fmtHijri(td)}</span></section>
   <section class="card soft hero-grid"><div><h1 class="big">${greet}</h1><p style="margin:4px 0 0;font-size:14px">${line}</p>
     <span class="streak">سلسلة الأيام المنظمة <b class="num">${st.streak}</b> يوم</span></div>${ring(st.pct)}</section>
   ${notes.length ? `<section class="card warn"><div class="sh"><h2>انتبه</h2></div><ul class="coach">${notes.slice(0, 4).map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}
   <section class="card"><div class="sh"><h2>أهم 3 النهارده</h2><span class="count num">${focus.filter(t => t.status === 'done').length}/${focus.length || 3}</span></div>
     ${focus.length ? taskList(focus) : '<p class="empty">دوس النجمة ★ جنب أي مهمة عشان تختارها من أهم 3.</p>'}</section>
+  ${nudge ? `<a class="card linkcard" href="#/chat"><span><b>رفيقك بيسأل</b><br><span class="hint">${esc(nudge.text.slice(0, 90))}</span></span><span class="go">رد</span></a>` : ''}
   ${prayerCard()}
+  ${azkarCard()}
   ${medCard()}
   ${dueToday.length ? `<section class="card"><div class="sh"><h2>مستحقة النهارده</h2><span class="count num">${dueToday.length}</span></div>${taskList(dueToday)}</section>` : ''}
   ${carried.length ? `<section class="card"><div class="sh"><h2>مترحّلة من أيام فاتت</h2><button class="link" data-act="tdCarryAll">انقل الكل للنهارده</button></div>${taskList(carried.slice(0, 8))}${carried.length > 8 ? `<p class="hint">و${carried.length - 8} كمان في المهام.</p>` : ''}</section>` : ''}
@@ -116,15 +122,21 @@ registerActions({
   tdSaveCheckin: async () => { const mood = +segV('d-mood'), energy = +segV('d-energy'); if (!mood || !energy) return toast('اختار المزاج والطاقة');
     try { await saveDay(today(), { mood, energy, word: val('d-word'), highlight: val('d-hl') }); closeSheet(); toast('تسجيل اليوم اتحفظ'); } catch (x) { toast(errText(x)); } },
   tdMeds: () => { const it = P.meds.filter(m => m.active);
-    openSheet(`<h3>الدواء ومواعيده</h3><p class="hint">المواعيد بصيغة 24 ساعة ومفصولة بفاصلة، مثال: 09:00, 21:00. هيوصلك إشعار في الميعاد، وتاني بعد ساعة لو مسجلتش.</p>
-    ${[0, 1, 2, 3].map(i => `<div class="row2"><label class="fld"><span>الدواء ${i + 1}</span><input id="md-n-${i}" value="${esc(it[i]?.name || '')}"></label><label class="fld"><span>المواعيد</span><input id="md-t-${i}" dir="ltr" value="${esc((it[i]?.times || []).join(', '))}" placeholder="09:00"></label></div>`).join('')}
+    const row = (i, m) => `<div class="medrow" data-i="${i}"><label class="fld"><span>الدواء</span><input class="md-n" value="${esc(m?.name || '')}" placeholder="اسم الدواء"></label>
+      <div class="fld"><span>المواعيد</span><div class="times">${(m?.times?.length ? m.times : ['09:00']).map(t => `<input type="time" class="md-t" value="${t}">`).join('')}<button type="button" class="mini" data-act="tdAddTime">+ ميعاد</button></div></div></div>`;
+    openSheet(`<h3>الدواء ومواعيده</h3><p class="hint">هيوصلك إشعار في الميعاد، وتاني بعد ساعة لو مسجلتش. سيب الاسم فاضي عشان تشيل دواء.</p>
+    <div id="med-rows" style="display:grid;gap:12px">${(it.length ? it : [null]).map((m, i) => row(i, m)).join('')}</div>
+    <button class="btn ghost sm" data-act="tdAddMed">+ دواء تاني</button>
     <div class="actions"><button class="btn primary block" data-act="tdSaveMeds">حفظ</button></div>`); },
+  tdAddTime: el => { const i = document.createElement('input'); i.type = 'time'; i.className = 'md-t'; i.value = '21:00'; el.before(i); },
+  tdAddMed: () => { const box = document.getElementById('med-rows'); const n = box.children.length;
+    box.insertAdjacentHTML('beforeend', `<div class="medrow" data-i="${n}"><label class="fld"><span>الدواء</span><input class="md-n" placeholder="اسم الدواء"></label><div class="fld"><span>المواعيد</span><div class="times"><input type="time" class="md-t" value="09:00"><button type="button" class="mini" data-act="tdAddTime">+ ميعاد</button></div></div></div>`); },
   tdSaveMeds: async el => {
     const old = P.meds.filter(m => m.active), rows = [];
-    for (const i of [0, 1, 2, 3]) {
-      const name = val('md-n-' + i); if (!name) continue;
-      const times = val('md-t-' + i).split(/[,،\s]+/).filter(Boolean).map(normHM);
-      if (!times.length || times.includes(null)) return toast(`مواعيد «${name}» مش مظبوطة. اكتبها زي 09:00`);
+    for (const [i, r] of [...document.querySelectorAll('.medrow')].entries()) {
+      const name = r.querySelector('.md-n').value.trim(); if (!name) continue;
+      const times = [...r.querySelectorAll('.md-t')].map(x => normHM(x.value)).filter(Boolean);
+      if (!times.length) return toast(`حدد ميعاد لـ«${name}»`);
       rows.push({ id: old[i]?.id, name, times: [...new Set(times)].sort() });
     }
     el.disabled = true;

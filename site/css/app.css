@@ -114,7 +114,7 @@ body.no-tabs .fab{bottom:calc(20px + env(safe-area-inset-bottom,0px))}
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:12px}
 .sheet .grab{width:40px;height:4px;border-radius:9px;background:var(--line);margin:0 auto}
 .sheet h3{font-family:var(--f-display);font-weight:500;font-size:20px;margin:0}
-.sheet .x{position:absolute;top:10px;left:max(12px,env(safe-area-inset-left,0px));background:var(--sunk);border:0;border-radius:10px;width:34px;height:34px;font-size:18px}
+.sheet .x{position:absolute;z-index:2;top:10px;left:max(12px,env(safe-area-inset-left,0px));background:var(--sunk);border:0;border-radius:10px;width:34px;height:34px;font-size:18px}
 .fld{display:grid;gap:4px;min-width:0}
 .fld>span{font-size:13px;color:var(--muted)}
 input,textarea,select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:inherit;font-size:16px}
@@ -195,6 +195,32 @@ ul.coach{margin:0;padding-inline-start:18px;display:grid;gap:4px;font-size:14px}
 .ai-out h4{font-family:var(--f-display);font-weight:500;font-size:16px;margin:12px 0 4px}
 .ai-out p{margin:4px 0} .ai-out ul{margin:4px 0;padding-inline-start:20px}
 .fab.round{width:58px;padding:0;font-size:30px;line-height:1}
+
+/* --- date, azkar, companion chat, medication times --- */
+.datebar{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:2px 2px 0}
+.datebar .wd{font-family:var(--f-display);font-size:26px;font-weight:700;color:var(--accent);line-height:1.2}
+.brand small b{color:var(--accent);font-weight:600}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--bg);font-size:13px;padding:0}
+.days .on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.azlist{display:grid;gap:2px;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+.azlist .checkrow{align-items:flex-start;padding:6px 0}
+.zikr{display:grid;gap:14px;text-align:center;justify-items:center;padding:28px 18px;min-height:46vh;align-content:center;width:100%;font:inherit;color:inherit;cursor:pointer}
+.ztext{font-family:var(--f-display);font-size:22px;line-height:1.9;font-weight:500}
+.zcount{font-size:15px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:4px 14px}
+.zcount b{font-size:20px}
+.zikr-done{text-align:center;display:grid;gap:8px;justify-items:center}
+.chat{display:grid;gap:10px;max-height:60vh;overflow:auto}
+.msg{max-width:85%;padding:8px 12px;border-radius:14px;background:var(--sunk)}
+.msg p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg small{display:block;margin-top:2px;font-size:11px}
+.msg.user{justify-self:start;background:var(--accent);color:var(--accent-ink)}
+.msg.user small{color:inherit;opacity:.75}
+.msg.assistant{justify-self:end}
+.chatbox{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.medrow{border:1px solid var(--line);border-radius:12px;padding:10px;display:grid;gap:8px}
+.times{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.times input[type=time]{width:auto;min-width:7.5em}
 
 /* report rendered offscreen, then captured as an image */
 #report-stage{position:fixed;left:-10000px;top:0;width:720px;pointer-events:none}

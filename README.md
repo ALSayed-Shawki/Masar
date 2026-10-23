@@ -29,7 +29,7 @@ site/js/
     settings/            notifications, group members / PINs / invite
 supabase/
   migrations/            schema + RLS (versioned; add new files, never edit applied ones)
-  functions/             ai · push-config · med-reminders
+  functions/             ai · push-config · reminders (medication, azkar, AI check-ins)
 tests/                   unit tests (npm test) + UI smoke test (python3 tests/smoke.py)
 ```
 
@@ -51,7 +51,7 @@ tests/                   unit tests (npm test) + UI smoke test (python3 tests/sm
 4. **Run Actions:**
    - "Deploy database and functions to Supabase".
    - "Create push notification keys (run once)", typing `YES`.
-5. **Medication reminders:** Supabase → Integrations → Cron → new job, every 5 minutes (`*/5 * * * *`), type *Supabase Edge Function* → `med-reminders`, with header `x-cron-secret: <CRON_SECRET>`.
+5. **Reminders (medication, azkar, AI check-ins):** Supabase → Integrations → Cron → new job, every 5 minutes (`*/5 * * * *`), type *Supabase Edge Function* → `reminders`, with header `x-cron-secret: <CRON_SECRET>`.
 6. **Owner account:**
    - Open the app, choose "اعمل الحساب", then sign in.
    - Then disable new email sign-ups in Supabase (Authentication → Sign In / Providers), so nobody else can create an account.

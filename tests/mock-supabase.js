@@ -15,7 +15,7 @@ const T = (window.__DB = window.__DB || {
     { id: 'e2', group_id: 'g1', title: 'بقالة', amount_c: 9000, date: '2026-10-21', payer_id: 'm-a', split_type: 'one', participants: ['m-g'], weights: {}, amounts: {}, category: 'بقالة وبيت', note: '', created_by: FRIEND, created_by_member: 'm-a', created_at: '2026-10-21T20:00:00Z', deleted: false },
   ],
   settlements: [],
-  projects: [], tasks: [], notes: [], wins: [], money_entries: [], goals: [], weeks: [], settings: [],
+  chat_messages: [{ id: 'c1', owner_id: OWNER, role: 'assistant', text: 'عامل إيه يا برنس؟ خلصت تقرير أكناف ولا لسه؟', source: 'nudge', created_at: '2026-10-23T15:00:00Z' }], projects: [], tasks: [], notes: [], wins: [], money_entries: [], goals: [], weeks: [], settings: [],
   day_logs: [], medications: [{ id: 'med1', owner_id: OWNER, name: 'فيتامين د', times: ['09:00', '21:00'], timezone: 'Asia/Riyadh', active: true, created_at: '2026-10-01' }],
   push_subscriptions: [],
 });
@@ -74,7 +74,7 @@ export function createClient() {
       if (name !== 'ai') return { data: { publicKey: 'x' }, error: null };
       const t = o.body.task;
       const text = t === 'capture' ? JSON.stringify([{ kind: 'task', title: 'تجهيز تقرير أعمار الديون لعميل أكناف', dod: 'التقرير متسلم', due: '', priority: 2 }, { kind: 'expense', title: 'غدا', amount: 45, currency: 'SAR', category: 'أكل وبيت' }, { kind: 'idea', title: 'باقة Odoo جاهزة للمخابز' }])
-        : t === 'polish' ? JSON.stringify({ title: 'مراجعة تقرير المبيعات', dod: 'اتبعت للعميل', note: '' }) : '## الخلاصة\n- أسبوع كويس';
+        : t === 'chat' ? 'تمام يا هندسة، كمّل كده. فاضلك إيه النهارده؟' : t === 'polish' ? JSON.stringify({ title: 'مراجعة تقرير المبيعات', dod: 'اتبعت للعميل', note: '' }) : '## الخلاصة\n- أسبوع كويس';
       return { data: { text }, error: null };
     } },
   };
