@@ -33,6 +33,12 @@ export async function load(gid) {
   G.expenses = e.data || []; G.settlements = s.data || [];
   G.isOwner = G.group.owner_id === G.uid;
   G.me = G.members.find(x => x.user_id === G.uid) || null;
+  // owner lost the link to their own name (e.g. opened a friend's invite): put it back once
+  if (G.isOwner && (!G.me || !G.me.is_owner) && !G._relinked) {
+    G._relinked = true;
+    const { error: e2 } = await sb.rpc('relink_owner', { p_group: gid });
+    if (!e2) return load(gid);
+  }
   G.loaded = true;
   emit();
 }

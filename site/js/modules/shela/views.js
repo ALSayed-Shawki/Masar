@@ -255,7 +255,7 @@ export async function renderJoin(root, code, onJoined) {
       try {
         const r = await join(J.code, J.pick, pin);
         if (r?.ok) { try { localStorage.setItem('shela.code', J.code); } catch {} toast('أهلاً بيك'); onJoined(r.group_id); return; }
-        toast({ bad_pin: `الرقم السري غلط. باقي ${r?.left ?? ''} محاولات.`, locked: 'محاولات كتير. جرّب بعد ربع ساعة.', no_pin: 'لسه متعملكش رقم سري. كلّم صاحب الشلة.' }[r?.error] || 'مقدرتش أدخلك.');
+        toast({ bad_pin: `الرقم السري غلط. باقي ${r?.left ?? ''} محاولات.`, locked: 'محاولات كتير. جرّب بعد ربع ساعة.', no_pin: 'لسه متعملكش رقم سري. كلّم صاحب الشلة.', owner: 'إنت صاحب الشلة؛ افتحها من تطبيق مسار (المزيد ← حساب الشلة). اللينك ده لأصحابك بس.' }[r?.error] || 'مقدرتش أدخلك.');
       } catch (x) { toast(errText(x)); }
       el.disabled = false;
     },
