@@ -14,6 +14,8 @@ export async function renderSettings(root, rerender) {
   const { data: { user } } = await sb.auth.getUser();
   if (!G.loaded) { const gid = await findMyGroupId(); if (gid) await load(gid).catch(() => {}); }
   S.push = await pushState().catch(() => 'unsupported');
+  S.pins = {};
+  if (G.group && G.isOwner) { const { data } = await sb.rpc('member_pin_status', { p_group: G.group.id }); (data || []).forEach(r => { S.pins[r.member_id] = r; }); }
   const pushTxt = { on: 'شغالة على الموبايل ده', off: 'مقفولة', denied: 'مرفوضة من إعدادات الموبايل', unsupported: isIOS() && !isStandalone() ? 'ضيف التطبيق للشاشة الرئيسية الأول' : 'الجهاز مش بيدعمها' }[S.push] || '';
   const g = G.group;
   root.innerHTML = `
@@ -38,10 +40,11 @@ export async function renderSettings(root, rerender) {
   <a class="card linkcard" href="#/azkar"><span><b>الأذكار</b><br><span class="hint">اختيار أذكار الصبح والليل ومواعيدها</span></span><span class="go">افتح</span></a>
   <section class="card"><div class="sh"><h2>الشلة</h2></div>
   ${!g ? `<p class="hint">اعمل الشلة وضيف أصحابك، وكل واحد ياخد رقم سري يدخل بيه من غير حساب.</p><button class="btn primary sm" data-act="stCreate">اعمل الشلة</button>` : `
-    <div class="row"><span>كود الدخول <span class="code">${esc(g.invite_code)}</span></span><button class="mini" data-act="stNewCode">كود جديد</button></div>
+    <p class="hint">كل واحد بيدخل بحاجتين: <b>اللينك</b> (فيه كود الشلة) و<b>رقمه السري</b> اللي بتعمله له من زرار «رقم سري» جنب اسمه. كود الشلة <b>مش</b> هو الرقم السري.</p>
+    <div class="row"><span>كود الشلة <span class="code">${esc(g.invite_code)}</span><br><small class="hint">جوه اللينك بس، محدش بيكتبه</small></span><button class="mini" data-act="stNewCode">كود جديد</button></div>
     <div class="actions"><a class="btn wa sm" href="${waLink(`ادخل حساب الشلة من اللينك ده وضيفه على الشاشة الرئيسية:\n${inviteLink()}\nالكود: ${g.invite_code}`)}" target="_blank" rel="noopener">ابعت اللينك واتساب</a><button class="btn ghost sm" data-act="stCopy">نسخ اللينك</button></div>
-    <div style="margin-top:8px">${G.members.map(m => `<div class="row"><span><b>${esc(m.name)}</b>${m.is_owner ? ' <span class="hint">(أنت)</span>' : m.user_id ? ' <span class="pill pos">داخل</span>' : ' <span class="pill neg">لسه</span>'}</span>
-      <span class="actions">${m.is_owner ? '' : `<button class="mini" data-act="stPin" data-id="${m.id}">رقم سري</button>`}<button class="mini" data-act="stRename" data-id="${m.id}">الاسم</button>${!m.is_owner && m.user_id ? `<button class="mini" data-act="stUnbind" data-id="${m.id}">فك الربط</button>` : ''}</span></div>`).join('')}</div>
+    <div style="margin-top:8px">${G.members.map(m => `<div class="row"><span><b>${esc(m.name)}</b>${m.is_owner ? ' <span class="hint">(أنت)</span>' : m.user_id ? ' <span class="pill pos">داخل</span>' : ' <span class="pill neg">لسه</span>'}${m.is_owner ? '' : S.pins[m.id]?.has_pin ? (S.pins[m.id].locked ? ' <span class="pill neg">مقفول 15 دقيقة</span>' : ' <span class="hint">· ليه رقم سري</span>') : ' <span class="pill neg">من غير رقم سري</span>'}</span>
+      <span class="actions">${m.is_owner ? '' : `<button class="mini" data-act="stPin" data-id="${m.id}">رقم سري</button>`}<button class="mini" data-act="stRename" data-id="${m.id}">الاسم</button>${!m.is_owner && m.user_id ? `<button class="mini" data-act="stUnbind" data-id="${m.id}">فك الربط</button>` : ''}${m.is_owner ? '' : `<button class="mini" data-act="stRemove" data-id="${m.id}">حذف</button>`}</span></div>`).join('')}</div>
     <div class="actions"><button class="btn ghost sm" data-act="stAddMember">إضافة عضو</button><button class="btn ghost sm" data-act="stCurrency">العملة: ${esc(g.currency)}</button></div>`}
   </section>
   <section class="card"><div class="sh"><h2>الحساب</h2></div><p class="hint" dir="ltr" style="text-align:right">${esc(user?.email || '')}</p>
@@ -50,7 +53,7 @@ export async function renderSettings(root, rerender) {
 
 function pinSheet(memberId) {
   const m = G.members.find(x => x.id === memberId);
-  openSheet(`<h3>رقم سري لـ${esc(m.name)}</h3><p class="hint">من 4 لـ 8 أرقام. ابعته له لوحده، مش في جروب.</p>
+  openSheet(`<h3>رقم سري لـ${esc(m.name)}</h3><p class="hint">ده الرقم اللي ${esc(m.name)} هيكتبه في خانة «رقمك السري» بعد ما يختار اسمه. من 4 لـ 8 أرقام. بعد الحفظ دوس زرار الواتساب يتبعتله هو واللينك مع بعض.</p>
   <input id="st-pin" class="pin" inputmode="numeric" maxlength="8" value="${String(Math.floor(1000 + Math.random() * 9000))}">
   <div class="actions"><button class="btn primary block" data-act="stSavePin" data-id="${memberId}">حفظ</button></div><div id="st-pin-share"></div>`);
 }
@@ -95,11 +98,17 @@ registerActions({
       await setPin(el.dataset.id, pin);
       const m = G.members.find(x => x.id === el.dataset.id);
       $('#st-pin-share').innerHTML = `<a class="btn wa block" href="${waLink(`يا ${m.name}، ده دخولك لحساب الشلة:\n${inviteLink()}\nاختار اسمك واكتب الرقم السري: ${pin}`)}" target="_blank" rel="noopener">ابعته لـ${esc(m.name)} واتساب</a>`;
-      el.hidden = true; toast('الرقم السري اتحفظ');
+      el.hidden = true; toast('الرقم السري اتحفظ'); S.rerender();
     } catch (x) { toast(errText(x)); }
   },
   stRename: el => { const m = G.members.find(x => x.id === el.dataset.id); openSheet(`<h3>تغيير الاسم</h3><input id="st-name" value="${esc(m.name)}"><div class="actions"><button class="btn primary block" data-act="stSaveName" data-id="${m.id}">حفظ</button></div>`); },
   stSaveName: async el => { const n = val('st-name'); if (!n) return; try { await renameMember(el.dataset.id, n); await load(G.group.id); closeSheet(); S.rerender(); } catch (x) { toast(errText(x)); } },
+  stRemove: async el => {
+    if (!confirmTap(el, 'حذف نهائي؟ أكّد')) return;
+    try { const { data, error } = await sb.rpc('remove_member', { p_member: el.dataset.id }); if (error) throw error; await load(G.group.id); S.rerender();
+      toast(data === 'archived' ? 'اتشال من الشلة. مصاريفه القديمة فضلت عشان الحسابات تفضل صح.' : 'اتحذف'); }
+    catch (x) { toast(errText(x)); }
+  },
   stUnbind: async el => { if (!confirmTap(el)) return; try { await unbindMember(el.dataset.id); S.rerender(); toast('اتفك الربط؛ يقدر يدخل تاني بالرقم السري'); } catch (x) { toast(errText(x)); } },
   stAddMember: () => openSheet(`<h3>عضو جديد</h3><input id="st-new" placeholder="الاسم"><div class="actions"><button class="btn primary block" data-act="stSaveMember">إضافة</button></div>`),
   stSaveMember: async () => { const n = val('st-new'); if (!n) return; try { const id = await addMember(n); S.rerender(); pinSheet(id); } catch (x) { toast(errText(x)); } },

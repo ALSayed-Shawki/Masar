@@ -63,6 +63,8 @@ export function createClient() {
     },
     from: t => new Q(t),
     rpc: async (fn, a) => {
+      if (fn === 'member_pin_status') return { data: [{ member_id: 'm-a', has_pin: true, locked: false }, { member_id: 'm-g', has_pin: false, locked: false }], error: null };
+      if (fn === 'remove_member') return { data: 'deleted', error: null };
       if (fn === 'group_preview') return { data: { id: 'g1', name: 'الشلة', members: [{ id: 'm-a', name: 'أحمد عثمان', claimed: false }, { id: 'm-g', name: 'غازي', claimed: false }] }, error: null };
       if (fn === 'join_group') return { data: a.p_pin === '1234' ? { ok: true, group_id: 'g1', member_id: a.p_member } : { ok: false, error: 'bad_pin', left: 3 }, error: null };
       return { data: null, error: null };

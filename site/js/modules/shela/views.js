@@ -241,9 +241,9 @@ export async function renderJoin(root, code, onJoined) {
     registerActions({ jReset: () => { location.hash = '#/join'; } }); return; }
   const draw = () => {
     root.innerHTML = `<section class="card claim"><div class="sh"><h2>أهلاً في ${esc(J.group.name)}</h2></div>
-    <p class="hint">اختار اسمك واكتب الرقم السري اللي اتبعتلك.</p>
+    <p class="hint">اختار اسمك واكتب <b>رقمك السري</b> (4 أرقام) اللي اتبعتلك في رسالة لوحدك. ده مش الكود اللي في اللينك.</p>
     ${J.group.members.map(m => `<button class="pick ${J.pick === m.id ? 'on' : ''}" data-act="jPick" data-id="${m.id}">${esc(m.name)}${m.claimed ? ' <small class="hint">(اتسجل قبل كده)</small>' : ''}</button>`).join('') || '<p class="empty">مفيش أسماء جاهزة. كلّم صاحب الشلة.</p>'}
-    ${J.pick ? `<label class="fld"><span>الرقم السري</span><input id="j-pin" class="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code"></label>
+    ${J.pick ? `<label class="fld"><span>رقمك السري</span><input id="j-pin" class="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="one-time-code"></label>
     <button class="btn primary block" data-act="jJoin">دخول</button>` : ''}
     <p class="hint">لو فتحت من موبايل جديد أو مسحت البيانات، اختار اسمك تاني بنفس الرقم السري.</p></section>`;
   };
