@@ -163,7 +163,9 @@ async function review(): Promise<number> {
 Deno.serve(async (req) => {
   // trimmed on both sides: a secret pasted with a trailing newline must still match
   const secret = (Deno.env.get("CRON_SECRET") ?? "").trim();
-  if (!secret || (req.headers.get("x-cron-secret") ?? "").trim() !== secret) return new Response("forbidden", { status: 403 });
+  const given = (req.headers.get("x-cron-secret") ?? "").trim();
+  // lengths only, never values: tells a missing server secret apart from a wrong/missing header
+  if (!secret || given !== secret) return new Response(`forbidden (server ${secret.length}, header ${given.length})`, { status: 403 });
   const pub = Deno.env.get("VAPID_PUBLIC_KEY"), priv = Deno.env.get("VAPID_PRIVATE_KEY");
   if (!pub || !priv) return new Response("push not configured", { status: 503 });
   webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") ?? "mailto:masar@example.com", pub, priv);
