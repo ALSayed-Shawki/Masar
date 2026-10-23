@@ -93,5 +93,10 @@ jobs:
             case "$r" in *"HTTP 200"*) break;; esac; sleep 15
           done
           echo "reminders test: $r"
+          case "$r" in *"HTTP 200"*) ;; *)
+            # compare fingerprints only (never the value) to see which side differs
+            echo "::notice title=Fingerprint local::$(printf '%s' "$CRON_SECRET" | sha256sum | cut -c1-12) len=${#CRON_SECRET}"
+            echo "::notice title=Fingerprint server::$(supabase secrets list --project-ref "$PROJECT_REF" 2>&1 | grep -i CRON_SECRET | tr -s ' ' | cut -c1-80)";;
+          esac
           echo "::notice title=Reminders::$r"
           case "$r" in *"HTTP 200"*) ;; *) echo "::error title=Reminders::$r"; exit 1;; esac
