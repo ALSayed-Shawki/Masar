@@ -1,0 +1,11 @@
+project_id = "masar"
+
+[functions.ai]
+verify_jwt = true
+
+[functions.push-config]
+verify_jwt = false
+
+# called by Supabase Cron with the x-cron-secret header
+[functions.med-reminders]
+verify_jwt = false

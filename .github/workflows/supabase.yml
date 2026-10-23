@@ -1,0 +1,38 @@
+name: Deploy database and functions to Supabase
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/**", ".github/workflows/supabase.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
+      - name: Apply database migrations
+        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+      - name: Set function secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          args=()
+          [ -n "$ANTHROPIC_API_KEY" ] && args+=("ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+          [ -n "$CRON_SECRET" ] && args+=("CRON_SECRET=$CRON_SECRET")
+          if [ ${#args[@]} -gt 0 ]; then supabase secrets set "${args[@]}" --project-ref "$PROJECT_REF"; fi
+      - name: Deploy edge functions
+        run: |
+          for f in ai push-config med-reminders; do
+            supabase functions deploy "$f" --project-ref "$PROJECT_REF"
+          done
