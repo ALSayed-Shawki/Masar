@@ -21,7 +21,13 @@ jobs:
       - name: Link project
         run: supabase link --project-ref "$PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
       - name: Apply database migrations
-        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+        run: |
+          set +e
+          supabase db push -p "$SUPABASE_DB_PASSWORD" 2>&1 | tee push.log
+          code=${PIPESTATUS[0]}
+          # surface the real error in the run summary (annotations), not just "exit code 1"
+          if [ "$code" -ne 0 ]; then grep -iE "error|failed|ERROR:" push.log | head -5 | while read -r l; do echo "::error title=Migration::$l"; done; fi
+          exit $code
       - name: Set function secrets
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
