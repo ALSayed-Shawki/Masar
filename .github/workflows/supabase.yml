@@ -36,6 +36,7 @@ jobs:
           set +e
           args=()
           if [ -n "$ANTHROPIC_API_KEY" ]; then args+=("ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"); else echo "::warning::ANTHROPIC_API_KEY is empty"; fi
+          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n' | sed 's/^ *//;s/ *$//')"
           if [ -n "$CRON_SECRET" ]; then args+=("CRON_SECRET=$CRON_SECRET"); else echo "::warning::CRON_SECRET is empty"; fi
           [ ${#args[@]} -eq 0 ] && exit 0
           supabase secrets set "${args[@]}" --project-ref "$PROJECT_REF" 2>&1 | tee secrets.log
@@ -56,6 +57,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set +e
+          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '\r\n' | sed 's/^ *//;s/ *$//')"; export CRON_SECRET
           if [ -z "$CRON_SECRET" ]; then echo "::warning::CRON_SECRET is empty, reminders not scheduled"; exit 0; fi
           # The secret goes into Supabase Vault; the cron job reads it from there, so it never sits in the job text.
           python3 - > q.json <<'PY'
@@ -86,7 +88,10 @@ jobs:
           rm -f q.json
           if [ "${code:0:1}" != "2" ]; then echo "::error title=Cron::HTTP $code $(head -c 400 resp.json)"; exit 1; fi
           # one manual run to prove the function accepts the secret
-          r=$(curl -sS -w ' HTTP %{http_code}' -X POST "https://$PROJECT_REF.supabase.co/functions/v1/reminders" -H "x-cron-secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{}')
+          for n in 1 2 3 4; do
+            r=$(curl -sS -w ' HTTP %{http_code}' -X POST "https://$PROJECT_REF.supabase.co/functions/v1/reminders" -H "x-cron-secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{}')
+            case "$r" in *"HTTP 200"*) break;; esac; sleep 15
+          done
           echo "reminders test: $r"
           echo "::notice title=Reminders::$r"
           case "$r" in *"HTTP 200"*) ;; *) echo "::error title=Reminders::$r"; exit 1;; esac
