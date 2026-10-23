@@ -34,15 +34,23 @@ with sync_playwright() as pw:
     assert 'في وقتها' in p.inner_text('[data-k="fajr"]'), 'prayer did not toggle'
     shot(p, '1-owner-today')
     # capture with AI → 3 items saved
-    p.click('#fab'); p.fill('#cap', 'عميل أكناف عايز تقرير، صرفت 45 غدا، فكرة باقة مخابز'); p.click('[data-act="capAI"]'); p.wait_for_selector('.capitem')
+    p.click('#fab'); p.click('[data-act="capKind"][data-v="ai"]'); p.fill('#cap', 'عميل أكناف عايز تقرير، صرفت 45 غدا، فكرة باقة مخابز'); p.click('[data-act="capAI"]'); p.wait_for_selector('.capitem')
     assert p.locator('.capitem').count() == 3, 'capture did not split into 3'
     p.click('[data-act="capSave"]'); p.wait_for_timeout(600)
+    # quick add: explicit kinds (request for today, idea)
+    p.click('#fab'); p.click('[data-act="capKind"][data-v="req"]'); p.fill('#q-t', 'كشف حساب مورد للمدير المالي'); p.click('[data-act="capSave1"]'); p.wait_for_timeout(500)
+    assert 'كشف حساب مورد' in p.inner_text('#view'), 'quick-add request not on today'
+    p.click('#fab'); p.click('[data-act="capKind"][data-v="idea"]'); shot(p, 'capture-kinds'); p.fill('#q-t', 'باقة دعم شهري'); p.click('[data-act="capSave1"]'); p.wait_for_timeout(400)
     for tab in ['tasks', 'ledger', 'ideas', 'money', 'more']:
         p.goto(BASE + f'index.html?as=owner#/{tab}'); p.wait_for_timeout(500); shot(p, f'tab-{tab}')
     p.goto(BASE + 'index.html?as=owner#/ideas'); p.wait_for_timeout(400); assert 'باقة Odoo' in p.inner_text('#view'), 'idea missing: ' + p.inner_text('#view')[:200]
     p.goto(BASE + 'index.html?as=owner#/money'); p.wait_for_timeout(300); assert '45' in p.inner_text('#view'), 'expense missing'
-    p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300); p.click('.chk >> nth=0'); p.wait_for_selector('#dn-note'); p.keyboard.press('Escape'); p.wait_for_timeout(300)
-    p.click('[data-act="nav"][data-v="ledger"]'); p.wait_for_timeout(300); assert '1' in p.inner_text('.kpi .v >> nth=0'), 'done count not 1'
+    p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300)
+    for v in ['today', 'week', 'later', 'none']:
+        if p.locator('.chk').count(): break
+        p.click(f'[data-act="tkView"][data-v="{v}"]'); p.wait_for_timeout(200)
+    p.click('.chk >> nth=0'); p.wait_for_selector('#dn-note'); p.keyboard.press('Escape'); p.wait_for_timeout(300)
+    p.click('[data-act="nav"][data-v="ledger"]'); p.wait_for_timeout(300); assert '1' in p.inner_text('.kpi2 .v >> nth=0'), 'done count not 1'
     # azkar: settings page, reader advances on tap and finishes
     p.goto(BASE + 'index.html?as=owner#/azkar'); p.wait_for_selector('#az-t-morning'); shot(p, 'azkar-settings')
     p.goto(BASE + 'index.html?as=owner#/azkar/morning'); p.wait_for_selector('.zikr'); shot(p, 'azkar-reader')
@@ -63,7 +71,7 @@ with sync_playwright() as pw:
     if p.locator('[data-act="rvMove"]').count(): p.locator('[data-act="rvMove"]').first.click(); p.wait_for_timeout(400)
     # projects + AI advisor
     p.goto(BASE + 'index.html?as=owner#/projects'); p.wait_for_selector('.pcard'); shot(p, 'projects')
-    p.locator('.pcard').first.click(); p.wait_for_selector('[data-q="status"]'); p.click('[data-q="status"]'); p.wait_for_timeout(700)
+    p.locator('.pcard').first.click(); p.wait_for_selector('[data-act="pjTab"]'); p.click('[data-act="pjTab"][data-v="advisor"]'); p.wait_for_selector('[data-q="status"]'); p.click('[data-q="status"]'); p.wait_for_timeout(700)
     assert 'المشروع ماشي' in p.inner_text('.pchat'), 'project AI reply missing'; shot(p, 'project')
     # brain + Claude link
     p.goto(BASE + 'index.html?as=owner#/settings'); p.wait_for_selector('#br-text'); p.fill('#br-text', 'استشاري Odoo'); p.click('[data-act="stBrain"]'); p.wait_for_timeout(300)

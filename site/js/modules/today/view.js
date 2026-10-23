@@ -6,7 +6,7 @@ import { azkarCard } from '../azkar/view.js';
 import { lastNudge } from '../chat/view.js';
 import { errText } from '../../core/supa.js';
 import { CONFIG } from '../../config.js';
-import { P, saveDay, saveWeek, update, insert, refresh, openTasks, doneDate } from '../../core/store.js';
+import { P, myName, saveDay, saveWeek, update, insert, refresh, openTasks, doneDate } from '../../core/store.js';
 import { sb } from '../../core/supa.js';
 import { taskList, byDue, layoutToggle } from '../tasks/view.js';
 
@@ -82,19 +82,35 @@ export function renderToday(root, rerender) {
   const block = (pid, items) => { const p = P.projects.find(x => x.id === pid);
     return `<section class="card"><div class="sh"><h2>${p ? `<a class="plink" href="#/project/${p.id}">${esc(p.name)}</a>` : 'من غير مشروع'}</h2><span class="count num">${items.length}</span></div>${taskList(items)}</section>`; };
 
+  // hero: today's ring + the next thing to do
+  const total = doneToday.length + board.length, pct = total ? Math.round(doneToday.length / total * 100) : 0, C = 2 * Math.PI * 34;
+  const next = board.slice().sort((a, b) => (b.priority || 1) - (a.priority || 1) || byDue(a, b))[0];
+  const tp = P.days[td]?.prayers || {}, np = PRAYERS.find(([k]) => !tp[k]);
+  const meds = P.days[td]?.meds || {}, nd = doses().find(x => !meds[x.key]);
+  const greet = hour < 12 ? 'صباح الخير' : hour < 17 ? 'نهارك سعيد' : 'مساء الخير';
   root.innerHTML = `
   <section class="datebar"><span class="wd">النهارده ${fmtWeekday(td)}</span><span>${fmtFull(td)}</span><span class="hint">${fmtHijri(td)}</span></section>
+  <section class="card hero2">
+    <svg viewBox="0 0 84 84" class="ring2" role="img" aria-label="خلصت ${pct}% من شغل النهارده"><circle cx="42" cy="42" r="34" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="9"/><circle cx="42" cy="42" r="34" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 42 42)"/><text x="42" y="48" text-anchor="middle" font-size="17" font-weight="700" fill="currentColor">${pct}%</text></svg>
+    <div class="hx"><span class="hint">${greet}${myName() ? ` يا ${esc(myName())}` : ''}</span><b>خلصت <span class="num">${doneToday.length}</span> من <span class="num">${total}</span></b>
+      ${next ? `<button class="nx" data-act="tkEdit" data-id="${next.id}">الجاية: ${esc(next.title)}</button>` : `<span class="nx">${total ? 'خلصت كل حاجة النهارده 👏' : 'مفيش حاجة مستحقة. ابدأ بطلب من تحت.'}</span>`}</div>
+  </section>
+  <div class="strip">
+    ${np ? `<button class="mini2" data-act="tdPrayer" data-k="${np[0]}" data-d="${td}"><span class="k">الصلاة</span><b>${pLabel(np[0], np[1], td)}</b><span class="k">دوس: في وقتها</span></button>` : '<a class="mini2 ok" href="#/ledger"><span class="k">الصلاة</span><b>5 من 5</b><span class="k">اتسجلت كلها</span></a>'}
+    ${nd ? `<button class="mini2 ${nowHM() >= nd.t ? 'due' : ''}" data-act="tdDose" data-k="${esc(nd.key)}" data-v="taken"><span class="k">الدواء</span><b class="num">${nd.t}</b><span class="k">${nowHM() >= nd.t ? 'خدته؟ دوس' : esc(nd.name)}</span></button>` : doses().length ? '<span class="mini2 ok"><span class="k">الدواء</span><b>تمام</b><span class="k">اتسجل كله</span></span>' : '<button class="mini2" data-act="tdMeds"><span class="k">الدواء</span><b>ضيف</b><span class="k">مواعيدك</span></button>'}
+    <a class="mini2" href="#/azkar"><span class="k">الأذكار</span><b>${hour < 15 ? 'الصباح' : 'المساء'}</b><span class="k">افتح</span></a>
+  </div>
   <form class="card quickadd" id="qa" autocomplete="off">
     <div class="qa-row"><select id="qa-proj" aria-label="المشروع"><option value="">من غير مشروع</option>${work.map(p => `<option value="${p.id}" ${p.id === last ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
     <label class="qa-kind"><input type="checkbox" id="qa-req" checked> طلب النهارده</label></div>
     <div class="qa-row"><input id="qa-text" placeholder="اتطلب منك إيه؟ أو حاجة لازم تخلص…" enterkeyhint="done"><button class="btn primary" type="submit">إضافة</button></div>
   </form>
   ${hour >= 19 && lateToday ? `<a class="card linkcard warnc" href="#/review"><span><b>آخر اليوم</b><br><span class="hint">فاضل ${lateToday} مخلصتش. ننقلهم لإمتى؟</span></span><span class="go">راجع</span></a>` : ''}
-  <div class="progress-line"><span>خلصت <b class="num">${doneToday.length}</b> من <b class="num">${doneToday.length + board.length}</b> النهارده</span><span class="hint">الأسبوع: <b class="num">${st.done.length}</b> · <a class="link" href="#/ledger">الميزان</a></span>${board.length ? layoutToggle() : ''}</div>
+  ${nudge ? `<a class="card linkcard" href="#/chat"><span><b>رفيقك بيسأل</b><br><span class="hint">${esc(nudge.text.slice(0, 90))}</span></span><span class="go">رد</span></a>` : ''}
+  <div class="progress-line"><span><b>شغل النهارده</b></span><span class="hint">الأسبوع: <b class="num">${st.done.length}</b> · <a class="link" href="#/ledger">تقريري</a></span>${board.length ? layoutToggle() : ''}</div>
   ${groups.size ? [...groups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1)).map(([pid, items]) => block(pid, items)).join('') : '<section class="card"><p class="empty">مفيش حاجة مستحقة النهارده. سجّل أي طلب يجيلك من فوق، أو اختار من المهام بالنجمة ★.</p></section>'}
   ${doneToday.length ? `<details class="card donecard"><summary><b>اللي خلص النهارده</b> <span class="num">${doneToday.length}</span></summary>${doneToday.map(t => `<div class="item"><p>✓ ${esc(t.title)}${t.project_id ? ` <span class="chip">${esc(P.projects.find(p => p.id === t.project_id)?.name || '')}</span>` : ''}</p>${t.done_note ? `<p class="hint">${esc(t.done_note)}</p>` : `<button class="mini" data-act="tdNote" data-id="${t.id}">ضيف ملاحظة</button>`}</div>`).join('')}</details>` : ''}
   ${notes.length ? `<section class="card warn"><div class="sh"><h2>انتبه</h2></div><ul class="coach">${notes.slice(0, 4).map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}
-  ${nudge ? `<a class="card linkcard" href="#/chat"><span><b>رفيقك بيسأل</b><br><span class="hint">${esc(nudge.text.slice(0, 90))}</span></span><span class="go">رد</span></a>` : ''}
   ${prayerCard()}
   ${azkarCard()}
   ${medCard()}

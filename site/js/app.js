@@ -37,7 +37,7 @@ const ICONS = {
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
   money: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M16 15h2"/></svg>',
 };
-const TABS = [['today', 'اليوم'], ['projects', 'المشاريع'], ['tasks', 'المهام'], ['ledger', 'الميزان'], ['more', 'المزيد']];
+const TABS = [['today', 'اليوم'], ['projects', 'المشاريع'], ['tasks', 'المهام'], ['ledger', 'تقريري'], ['more', 'المزيد']];
 const TAB_OF = { project: 'projects', ideas: 'more', money: 'more', shela: 'more', azkar: 'more', chat: 'more', review: 'today', settings: 'more' };
 const PAGES = { projects: renderProjects, project: renderProject, review: renderReview, more: renderMore, azkar: renderAzkar, chat: renderChat, today: renderToday, tasks: renderTasks, ledger: renderLedger, ideas: renderIdeas, money: renderMoney, settings: renderSettings };
 
@@ -84,8 +84,10 @@ async function renderInner() {
   // owner app
   if (!session || isAnon(session)) { setTabs(false); $('#fab').hidden = true; return renderLogin(view, async () => { session = await getSession(); location.hash = '#/today'; render(); }); }
   setTabs(true, TAB_OF[page] || page);
-  const ic = k => ICONS[k].replace('<svg', '<svg width="18" height="18" style="vertical-align:-4px;fill:none;stroke:currentColor;stroke-width:1.8"');
-  $('#top-right').innerHTML = `<span class="actions"><button class="who" data-act="nav" data-v="chat" aria-label="رفيقك">${ic('chat')}</button><button class="who" data-act="nav" data-v="settings" aria-label="الإعدادات">${ic('settings')}</button></span>`;
+  const ic = k => ICONS[k].replace('<svg', '<svg width="21" height="21" style="vertical-align:-4px;fill:none;stroke:currentColor;stroke-width:1.8"');
+  // رفيقك gets a dot when his last message is still waiting for a reply
+  const waiting = P.loaded && P.chat.filter(m => !m.project_id)[0]?.role === 'assistant';
+  $('#top-right').innerHTML = `<span class="actions"><button class="iconbtn" data-act="nav" data-v="chat" aria-label="رفيقك${waiting ? ': عنده سؤال' : ''}">${ic('chat')}${waiting ? '<span class="badge"></span>' : ''}</button><button class="iconbtn" data-act="nav" data-v="settings" aria-label="الإعدادات">${ic('settings')}</button></span>`;
   if (page === 'shela') {
     if (!(await ensureGroup())) { view.innerHTML = '<section class="card"><p class="empty">لسه معملتش الشلة.</p><a class="btn primary sm" href="#/settings">اعملها من الإعدادات</a></section>'; $('#fab').hidden = true; return; }
     return renderShela(view, render);

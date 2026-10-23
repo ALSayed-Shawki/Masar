@@ -5,10 +5,13 @@ import { today, weekStart, fmtShort, ymd } from '../../core/dates.js';
 import { errText } from '../../core/supa.js';
 import { ai, mdHtml } from '../../core/ai.js';
 import { P, myName, insert, update, openTasks, doneDate } from '../../core/store.js';
-import { AREAS, taskList, byDue } from '../tasks/view.js';
+import { AREAS, taskList, byDue, hue } from '../tasks/view.js';
 
 const STATUS = { active: 'شغال', prospect: 'عميل محتمل / ديمو', paused: 'متوقف', done: 'خلص' };
-const UI = { rerender: () => {}, busy: false };
+const UI = { rerender: () => {}, busy: false, tab: 'overview' };
+const pColor = id => `hsl(${hue(id)} 45% 38%)`;
+const initials = n => { const w = String(n).replace(/^(ال)/, '').trim().split(/\s+/); return (w.length > 1 ? w[0][0] + w[1].replace(/^ال/, '')[0] : w[0].slice(0, 2)) || '؟'; };
+export function progress(pid) { const all = P.tasks.filter(t => t.project_id === pid); const d = all.filter(t => t.status === 'done').length; return { pct: all.length ? Math.round(d / all.length * 100) : 0, done: d, total: all.length }; }
 
 export function renderProjects(root, rerender) {
   UI.rerender = rerender;
@@ -16,9 +19,10 @@ export function renderProjects(root, rerender) {
   const card = p => {
     const open = openTasks().filter(t => t.project_id === p.id), late = open.filter(t => t.due && t.due < today()).length;
     const week = P.tasks.filter(t => t.project_id === p.id && doneDate(t) >= ws).length;
-    return `<a class="card pcard" href="#/project/${p.id}"><div class="sh"><h2>${esc(p.name)}</h2><span class="pill st-${p.status}">${STATUS[p.status] || ''}</span></div>
-      ${p.client ? `<p class="hint" style="margin:0">${esc(p.client)}</p>` : ''}
-      <div class="meta"><span>مفتوح <b class="num">${open.length}</b></span>${late ? `<span class="due over">متأخر ${late}</span>` : ''}<span>خلص الأسبوع ده <b class="num">${week}</b></span>${p.scope ? '' : '<span class="rolled">من غير Scope</span>'}</div>
+    const pr = progress(p.id), last = P.tasks.filter(t => t.project_id === p.id).map(t => doneDate(t) || '').sort().pop();
+    return `<a class="card pcard" href="#/project/${p.id}"><div class="ph"><span class="ini" style="background:${pColor(p.id)}">${esc(initials(p.name))}</span><div class="pn"><b>${esc(p.name)}</b>${p.client ? `<span class="hint">${esc(p.client)}</span>` : ''}</div><span class="pill st-${p.status}">${STATUS[p.status] || ''}</span></div>
+      <div class="track"><div class="fill" style="width:${pr.pct}%;background:${pColor(p.id)}"></div></div>
+      <div class="meta"><span><b class="num">${pr.pct}%</b> من المهام</span><span>مفتوح <b class="num">${open.length}</b></span>${late ? `<span class="due over">متأخر ${late}</span>` : ''}<span>الأسبوع ده <b class="num">${week}</b></span>${last ? `<span>آخر إنجاز ${fmtShort(last)}</span>` : ''}${p.scope ? '' : '<span class="rolled">من غير Scope</span>'}</div>
       ${p.next_step ? `<p class="next">الخطوة الجاية: ${esc(p.next_step)}</p>` : ''}</a>`;
   };
   const by = s => P.projects.filter(p => p.status === s);
@@ -50,26 +54,29 @@ ${threadOf(p.id).slice(-8).map(m => `${m.role === 'user' ? (myName() || 'أنا'
 
 export function renderProject(root, rerender, id) {
   UI.rerender = rerender;
+  if (UI.pid !== id) { UI.pid = id; UI.tab = 'overview'; }
   const p = P.projects.find(x => x.id === id);
   if (!p) { root.innerHTML = '<section class="card"><p class="empty">المشروع ده مش موجود.</p><a class="btn ghost sm" href="#/projects">المشاريع</a></section>'; return; }
   const open = openTasks().filter(t => t.project_id === p.id).sort(byDue);
   const done = P.tasks.filter(t => t.project_id === p.id && t.status === 'done').sort((a, b) => String(b.done_at).localeCompare(String(a.done_at)));
   const thread = threadOf(p.id);
+  const pr = progress(p.id), tab = UI.tab;
+  const TABS = [['overview', 'نظرة عامة'], ['tasks', `المهام ${open.length}`], ['advisor', 'المستشار'], ['log', 'السجل']];
   root.innerHTML = `<a class="link" href="#/projects">‹ المشاريع</a>
-  <section class="card soft"><div class="sh"><h1 class="big">${esc(p.name)}</h1><span class="pill st-${p.status}">${STATUS[p.status]}</span></div>
-    ${p.client ? `<p class="hint" style="margin:0">${esc(p.client)}</p>` : ''}${p.next_step ? `<p class="next">الخطوة الجاية: ${esc(p.next_step)}</p>` : ''}
-    <div class="actions"><button class="btn ghost sm" data-act="pjEdit" data-id="${p.id}">تعديل الـScope والحالة</button></div></section>
-  <section class="card"><div class="sh"><h2>الـScope</h2></div>${p.scope ? `<div class="scope">${esc(p.scope)}</div>` : '<p class="empty">اكتب الـScope: المطلوب، الموديولات، اللي اتسلم، اللي فاضل. الذكاء الاصطناعي بيعتمد عليه.</p>'}</section>
-  <section class="card"><div class="sh"><h2>المستشار</h2></div>
-    <div class="actions"><button class="btn primary sm" data-act="pjAsk" data-id="${p.id}" data-q="status">إحنا فين؟</button><button class="btn primary sm" data-act="pjAsk" data-id="${p.id}" data-q="next">اقترح الخطوات الجاية</button><button class="btn ghost sm" data-act="pjAsk" data-id="${p.id}" data-q="risks">المخاطر</button></div>
+  <section class="card"><div class="ph"><span class="ini lg" style="background:${pColor(p.id)}">${esc(initials(p.name))}</span><div class="pn"><h1 class="big">${esc(p.name)}</h1>${p.client ? `<span class="hint">${esc(p.client)}</span>` : ''}</div><span class="pill st-${p.status}">${STATUS[p.status]}</span></div>
+    <div class="track" style="margin-top:10px"><div class="fill" style="width:${pr.pct}%;background:${pColor(p.id)}"></div></div>
+    <p class="hint" style="margin:6px 0 0"><b class="num">${pr.pct}%</b> (${pr.done} من ${pr.total} مهمة)${p.next_step ? ` · الخطوة الجاية: <b style="color:var(--ink)">${esc(p.next_step)}</b>` : ''}</p></section>
+  <div class="chips">${TABS.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="pjTab" data-v="${k}">${l}</button>`).join('')}</div>
+  ${tab === 'overview' ? `<section class="card"><div class="sh"><h2>الـScope</h2><button class="link" data-act="pjEdit" data-id="${p.id}">تعديل</button></div>${p.scope ? `<div class="scope">${esc(p.scope)}</div>` : '<p class="empty">اكتب الـScope: المطلوب، الموديولات، اللي اتسلم، اللي فاضل. المستشار بيعتمد عليه.</p>'}</section>
+    ${p.ai_summary ? `<section class="card"><div class="sh"><h2>آخر رأي للمستشار</h2></div><div class="ai-out">${mdHtml(p.ai_summary, esc)}</div></section>` : ''}` : ''}
+  ${tab === 'tasks' ? `<section class="card"><form class="qa-row" id="pj-add"><input id="pj-task" placeholder="مهمة أو طلب جديد للمشروع…"><button class="btn primary sm" type="submit">إضافة</button></form>
+    ${open.length ? taskList(open) : '<p class="empty">مفيش مهام مفتوحة.</p>'}</section>` : ''}
+  ${tab === 'advisor' ? `<section class="card">
+    <div class="actions"><button class="btn primary sm" data-act="pjAsk" data-id="${p.id}" data-q="status">إحنا فين؟</button><button class="btn ghost sm" data-act="pjAsk" data-id="${p.id}" data-q="next">الخطوات الجاية</button><button class="btn ghost sm" data-act="pjAsk" data-id="${p.id}" data-q="risks">المخاطر</button></div>
     <div class="chat pchat">${thread.map(m => `<div class="msg ${m.role}">${m.role === 'assistant' ? `<div class="ai-out">${mdHtml(m.text, esc)}</div>` : `<p>${esc(m.text)}</p>`}</div>`).join('')}${UI.busy ? '<div class="msg assistant"><p class="hint">بيفكر…</p></div>' : ''}</div>
-    <div class="chatbox"><textarea id="pj-in" rows="2" placeholder="اسأله عن المشروع، أو احكيله اللي حصل…"></textarea><button class="btn primary" data-act="pjSend" data-id="${p.id}" ${UI.busy ? 'disabled' : ''}>ابعت</button></div></section>
-  <section class="card"><div class="sh"><h2>مفتوح</h2><span class="count num">${open.length}</span></div>
-    <form class="qa-row" id="pj-add"><input id="pj-task" placeholder="مهمة أو طلب جديد للمشروع…"><button class="btn primary sm" type="submit">إضافة</button></form>
-    ${open.length ? taskList(open) : '<p class="empty">مفيش مهام مفتوحة.</p>'}</section>
-  <section class="card"><div class="sh"><h2>اللي اتعمل</h2><span class="count num">${done.length}</span></div>
-    ${done.slice(0, 25).map(t => `<div class="item"><p>✓ ${esc(t.title)} <span class="hint">${fmtShort(doneDate(t))}</span></p>${t.done_note ? `<p class="hint">${esc(t.done_note)}</p>` : ''}</div>`).join('') || '<p class="empty">لسه.</p>'}</section>`;
-  root.querySelector('#pj-add').addEventListener('submit', async e => {
+    <div class="chatbox"><textarea id="pj-in" rows="2" placeholder="اسأله عن المشروع، أو احكيله اللي حصل…"></textarea><button class="btn primary" data-act="pjSend" data-id="${p.id}" ${UI.busy ? 'disabled' : ''}>ابعت</button></div></section>` : ''}
+  ${tab === 'log' ? `<section class="card">${done.length ? `<div class="tline">${done.slice(0, 40).map(t => `<div class="it"><b>${fmtShort(doneDate(t))}</b> · ${esc(t.title)}${t.done_note ? `<div class="hint">${esc(t.done_note)}</div>` : ''}</div>`).join('')}</div>` : '<p class="empty">لسه مفيش حاجة خلصت في المشروع ده.</p>'}</section>` : ''}`;
+  root.querySelector('#pj-add')?.addEventListener('submit', async e => {
     e.preventDefault(); const title = val('pj-task'); if (!title) return;
     try { await insert('tasks', { title, project_id: p.id, due: today(), kind: 'task' }); toast('اتضافت'); } catch (x) { toast(errText(x)); }
   });
@@ -104,6 +111,7 @@ function sheetProject(p) {
 
 registerActions({
   pjNew: () => sheetProject(null),
+  pjTab: el => { UI.tab = el.dataset.v; UI.rerender(); },
   pjEdit: el => sheetProject(P.projects.find(x => x.id === el.dataset.id)),
   pjSave: async el => {
     const name = val('pj-name'); if (!name) return toast('اكتب الاسم');
@@ -111,6 +119,6 @@ registerActions({
     try { if (el.dataset.id) await update('projects', el.dataset.id, data); else { const r = await insert('projects', { ...data, sort: P.projects.length + 1 }); location.hash = '#/project/' + r.id; } closeSheet(); toast('اتحفظ'); }
     catch (x) { toast(errText(x)); }
   },
-  pjAsk: el => { const p = P.projects.find(x => x.id === el.dataset.id); if (p && !UI.busy) askProject(p, QUESTIONS[el.dataset.q]); },
+  pjAsk: el => { const p = P.projects.find(x => x.id === el.dataset.id); if (p && !UI.busy) { UI.tab = 'advisor'; askProject(p, QUESTIONS[el.dataset.q]); } },
   pjSend: el => { const p = P.projects.find(x => x.id === el.dataset.id), t = val('pj-in'); if (p && t && !UI.busy) askProject(p, `رد على ${myName() || "صاحب الحساب"}: ${t}`, t); },
 });

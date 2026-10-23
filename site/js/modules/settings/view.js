@@ -1,4 +1,4 @@
-import { soundOn, setSound, paperSound } from '../../core/flip.js';
+import { SOUNDS, soundKind, setSound, paperSound, chimeOn, setChime, doneSound } from '../../core/flip.js';
 // Settings (owner): notifications, the group (members, PINs, invite), account.
 import { $, esc, toast, openSheet, closeSheet, val, registerActions, confirmTap, copyText, waLink } from '../../core/dom.js';
 import { sb, errText } from '../../core/supa.js';
@@ -48,8 +48,9 @@ export async function renderSettings(root, rerender) {
       <span class="actions">${m.is_owner ? '' : `<button class="mini" data-act="stPin" data-id="${m.id}">رقم سري</button>`}<button class="mini" data-act="stRename" data-id="${m.id}">الاسم</button>${!m.is_owner && m.user_id ? `<button class="mini" data-act="stUnbind" data-id="${m.id}">فك الربط</button>` : ''}${m.is_owner ? '' : `<button class="mini" data-act="stRemove" data-id="${m.id}">حذف</button>`}</span></div>`).join('')}</div>
     <div class="actions"><button class="btn ghost sm" data-act="stAddMember">إضافة عضو</button><button class="btn ghost sm" data-act="stCurrency">العملة: ${esc(g.currency)}</button></div>`}
   </section>
-  <section class="card"><div class="sh"><h2>صوت تقليب الصفحات</h2></div><p class="hint">لما تسحب يمين أو شمال بين الصفحات.</p>
-    <div class="actions"><button class="btn ${soundOn() ? 'primary' : 'ghost'} sm" data-act="stFlip">${soundOn() ? 'شغّال' : 'مقفول'}</button><button class="btn ghost sm" data-act="stFlipTest">جرّب</button></div></section>
+  <section class="card"><div class="sh"><h2>الأصوات</h2></div>
+    <div class="fld"><span>صوت تقليب الصفحات</span><div class="chips">${SOUNDS.map(([k, l]) => `<button class="${soundKind() === k ? 'on' : ''}" data-act="stFlip" data-v="${k}">${l}</button>`).join('')}</div></div>
+    <label class="checkrow"><input type="checkbox" id="st-chime" ${chimeOn() ? 'checked' : ''}> رنّة خفيفة لما تخلص مهمة</label></section>
   <section class="card"><div class="sh"><h2>الحساب</h2></div><p class="hint" dir="ltr" style="text-align:right">${esc(user?.email || '')}</p>
     <div class="row2"><label class="fld"><span>اسمك</span><input id="st-myname" value="${esc(myName())}"></label><div class="fld"><span>&nbsp;</span><button class="btn ghost sm" data-act="stSaveName2">حفظ الاسم</button></div></div>
     <div class="row2"><label class="fld"><span>كلمة سر جديدة</span><input id="st-pass" type="password" dir="ltr" autocomplete="new-password"></label><div class="fld"><span>&nbsp;</span><button class="btn ghost sm" data-act="stPass">تغيير كلمة السر</button></div></div>
@@ -64,8 +65,7 @@ function pinSheet(memberId) {
 }
 
 registerActions({
-  stFlip: el => { setSound(!soundOn()); el.textContent = soundOn() ? 'شغّال' : 'مقفول'; el.className = `btn ${soundOn() ? 'primary' : 'ghost'} sm`; if (soundOn()) paperSound(); },
-  stFlipTest: () => paperSound(),
+  stFlip: el => { setSound(el.dataset.v); paperSound(el.dataset.v); el.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === el)); },
   stPush: async el => { el.disabled = true; try { await enablePush(); toast('الإشعارات اشتغلت'); } catch (x) { toast(x.message || errText(x)); } S.rerender(); },
   stNudges: async el => { el.disabled = true; try { await setSetting('nudges', { enabled: document.getElementById('nd-on').checked, every: +val('nd-every') || 3, from: val('nd-from') || '10:00', to: val('nd-to') || '23:00', tz: CONFIG.TIMEZONE }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } el.disabled = false; },
   stBrain: async el => { el.disabled = true; try { await setSetting('brain', { text: val('br-text'), updated_at: new Date().toISOString() }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } el.disabled = false; },
@@ -125,3 +125,6 @@ registerActions({
   stPass: async () => { const p = val('st-pass'); if (p.length < 8) return toast('8 حروف على الأقل'); const { error } = await sb.auth.updateUser({ password: p }); toast(error ? errText(error) : 'اتغيرت كلمة السر'); },
   stOut: async () => { await sb.auth.signOut(); location.hash = '#/today'; location.reload(); },
 });
+
+// checkbox: a change listener (the click delegate would cancel the toggle)
+document.addEventListener('change', e => { if (e.target.id === 'st-chime') { setChime(e.target.checked); if (e.target.checked) doneSound(); } });

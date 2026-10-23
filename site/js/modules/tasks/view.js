@@ -4,9 +4,10 @@ import { today, addDays, dayDiff, pd, LOC, fmtShort } from '../../core/dates.js'
 import { errText } from '../../core/supa.js';
 import { ai, parseJSON } from '../../core/ai.js';
 import { P, insert, update, remove, pName, openTasks, doneDate } from '../../core/store.js';
+import { doneSound, confetti } from '../../core/flip.js';
 
 export const AREAS = { work: 'شغل', growth: 'تطوير', business: 'بزنس', personal: 'شخصي' };
-const UI = { view: 'open', proj: 'all', rerender: () => {} };
+const UI = { view: 'today', proj: 'all', rerender: () => {} };
 
 export function dueLabel(s) {
   const n = dayDiff(s, today());
@@ -18,7 +19,8 @@ const dueCls = (s, done) => { if (done) return ''; const n = dayDiff(s, today())
 export const byDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.priority || 1) - (a.priority || 1);
 
 // a stable color per project, so its tiles are recognisable at a glance
-const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const HUES = [152, 32, 212, 330, 78, 265, 8, 186];
+export const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return HUES[h % HUES.length]; };
 export function taskRow(t) {
   const done = t.status === 'done', star = t.focus_date === today();
   return `<li class="task p${t.priority || 1} ${done ? 'is-done' : ''}"${t.project_id ? ` style="--ph:${hue(t.project_id)}"` : ''}>
@@ -39,21 +41,29 @@ export function projSelect(id, cur) {
   }).join('')}</select>`;
 }
 
+// filters instead of one long scroll: each shows its open count
+const FILTERS = [
+  ['today', 'النهارده', (t, td) => (t.due && t.due <= td) || t.focus_date === td],
+  ['week', 'الأسبوع', (t, td) => t.due > td && t.due <= addDays(td, 7) && t.focus_date !== td],
+  ['later', 'بعدين', (t, td) => t.due > addDays(td, 7)],
+  ['none', 'بدون موعد', t => !t.due],
+];
 export function renderTasks(root, rerender) {
   UI.rerender = rerender;
-  const done = UI.view === 'done';
-  let a = done ? P.tasks.filter(t => t.status === 'done') : openTasks();
-  if (UI.proj !== 'all') a = a.filter(t => (t.project_id || '') === (UI.proj === 'none' ? '' : UI.proj));
+  const td = today(), done = UI.view === 'done';
+  const byProj = a => UI.proj === 'all' ? a : a.filter(t => (t.project_id || '') === (UI.proj === 'none' ? '' : UI.proj));
+  const open = byProj(openTasks());
+  const f = FILTERS.find(x => x[0] === UI.view) || FILTERS[0];
+  let a = done ? byProj(P.tasks.filter(t => t.status === 'done')) : open.filter(t => f[2](t, td));
   a.sort(done ? (x, y) => String(y.done_at).localeCompare(String(x.done_at)) : byDue);
-  const td = today(), groups = {};
-  if (!done) a.forEach(t => { const k = !t.due ? 'بدون موعد' : t.due < td ? 'متأخرة' : t.due === td ? 'النهارده' : t.due <= addDays(td, 7) ? 'خلال أسبوع' : 'بعد كده'; (groups[k] ||= []).push(t); });
+  const late = !done && UI.view === 'today' ? a.filter(t => t.due && t.due < td).length : 0;
   root.innerHTML = `
-  <div class="chips">${[['open', 'مفتوحة'], ['done', 'منجزة']].map(([k, l]) => `<button class="${UI.view === k ? 'on' : ''}" data-act="tkView" data-v="${k}">${l}</button>`).join('')}</div>
+  <div class="chips fchips">${FILTERS.map(([k, l, fn]) => `<button class="${UI.view === k ? 'on' : ''}" data-act="tkView" data-v="${k}">${l} <span class="c">${open.filter(t => fn(t, td)).length}</span></button>`).join('')}<button class="${done ? 'on' : ''}" data-act="tkView" data-v="done">منجزة</button></div>
   <div class="chips"><button class="${UI.proj === 'all' ? 'on' : ''}" data-act="tkProj" data-v="all">كل المشاريع</button>${P.projects.map(p => `<button class="${UI.proj === p.id ? 'on' : ''}" data-act="tkProj" data-v="${p.id}">${esc(p.name)}</button>`).join('')}<button class="${UI.proj === 'none' ? 'on' : ''}" data-act="tkProj" data-v="none">بدون مشروع</button></div>
   <div class="actions"><button class="btn primary sm" data-act="tkNew">مهمة جديدة</button><button class="btn ghost sm" data-act="tkNewProject">مشروع جديد</button>${layoutToggle()}</div>
-  ${!a.length ? `<section class="card"><p class="empty">${done ? 'لسه مفيش مهام منجزة هنا.' : 'مفيش مهام مفتوحة هنا. سجّل أي حاجة من زرار +.'}</p></section>`
-    : done ? `<section class="card">${taskList(a.slice(0, 80))}</section>`
-    : ['متأخرة', 'النهارده', 'خلال أسبوع', 'بعد كده', 'بدون موعد'].filter(k => groups[k]).map(k => `<section class="card"><div class="sh"><h2>${k}</h2><span class="count num">${groups[k].length}</span></div>${taskList(groups[k])}</section>`).join('')}`;
+  ${late ? `<p class="hint" style="margin:0 2px"><b class="due over">${late} متأخرة</b> من أيام فاتت، ظاهرة هنا مع النهارده.</p>` : ''}
+  ${!a.length ? `<section class="card"><p class="empty">${done ? 'لسه مفيش مهام منجزة هنا.' : 'مفيش حاجة هنا. سجّل أي حاجة من زرار +.'}</p></section>`
+    : `<section class="card">${taskList(done ? a.slice(0, 80) : a)}</section>`}`;
 }
 
 export function sheetTask(id, preset = {}) {
@@ -81,7 +91,10 @@ registerActions({
       else {
         await update('tasks', t.id, { status: 'done', done_at: new Date().toISOString() });
         const n = P.tasks.filter(x => doneDate(x) === today()).length;
-        toast(n >= 3 ? `${n} النهارده. كمّل كده.` : 'تمت ✓');
+        const left = openTasks().filter(x => (x.due && x.due <= today()) || x.focus_date === today()).length;
+        const all = left === 0 && n >= 2;
+        doneSound(all); if (all) confetti();
+        toast(all ? `خلصت كل شغل النهارده (${n}) 🎉` : n >= 3 ? `${n} النهارده. كمّل كده.` : 'تمت ✓');
         (await import('../today/view.js')).noteSheet(t.id);
       }
     } catch (x) { toast(errText(x)); }
