@@ -107,7 +107,7 @@ document.addEventListener('click', ev => {
 });
 document.addEventListener('masar:rerender', () => render());
 
-// Page-turn swipe between the bottom tabs (RTL: swiping left turns to the next tab on the left).
+// Page-turn swipe between the bottom tabs, like an Arabic book: swipe right = next tab, left = back.
 attachFlip(view, {
   enabled: () => MODE === 'masar' && !!session && !isAnon(session) && !sheetOpen() && route()[0] !== 'shela',
   neighbour: dir => { const keys = TABS.map(x => x[0]), [page] = route(), i = keys.indexOf(TAB_OF[page] || page); return i < 0 ? null : keys[i + dir] || null; },

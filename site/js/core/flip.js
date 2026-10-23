@@ -52,7 +52,8 @@ export function attachFlip(el, { neighbour, go, enabled }) {
     if (!s.lock) {
       if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { s = null; return; }
       if (Math.abs(dx) < 12) return;
-      s.lock = 'x'; s.dir = dx < 0 ? 1 : -1; s.target = neighbour(s.dir); el.style.willChange = 'transform';
+      // like an Arabic book: pull the page to the right to go forward
+      s.lock = 'x'; s.dir = dx > 0 ? 1 : -1; s.target = neighbour(s.dir); el.style.willChange = 'transform';
     }
     s.dx = dx;
     // no page on that side: let it give a little, then resist
@@ -62,15 +63,15 @@ export function attachFlip(el, { neighbour, go, enabled }) {
   const end = () => {
     if (!s || s.lock !== 'x') { s = null; return; }
     const { dx, target, dir } = s, v = Math.abs(dx) / Math.max(1, Date.now() - s.t); s = null;
-    if (!target || (Math.abs(dx) < W() * 0.28 && v < 0.45) || Math.sign(dx) !== -dir) { set(0, 220); setTimeout(clear, 230); return; }
+    if (!target || (Math.abs(dx) < W() * 0.28 && v < 0.45) || Math.sign(dx) !== dir) { set(0, 220); setTimeout(clear, 230); return; }
     paperSound(); navigator.vibrate?.(8);
     if (reduce) { clear(); go(target); return; }
-    set(-dir * W() * 1.05, 190);
+    set(dir * W() * 1.05, 190);
     setTimeout(() => {
       go(target);
       // the new page starts turned from the other side and settles flat
       requestAnimationFrame(() => {
-        set(dir * W() * 0.45, 0);
+        set(-dir * W() * 0.45, 0);
         requestAnimationFrame(() => requestAnimationFrame(() => { set(0, 260); setTimeout(clear, 270); }));
       });
     }, 190);
