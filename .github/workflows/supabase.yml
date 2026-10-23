@@ -76,9 +76,9 @@ jobs:
           select cron.schedule('masar-reminders', '*/5 * * * *', $job$
             select net.http_post(
               url := 'https://{ref}.supabase.co/functions/v1/reminders',
-              headers := jsonb_build_object('Content-Type', 'application/json',
-                'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'masar_cron_secret')),
-              body := '{{}}'::jsonb, timeout_milliseconds := 30000);
+              headers := jsonb_build_object('Content-Type', 'application/json'),
+              body := jsonb_build_object('secret', (select decrypted_secret from vault.decrypted_secrets where name = 'masar_cron_secret')),
+              timeout_milliseconds := 30000);
           $job$);
           """
           print(json.dumps({"query": q}))
@@ -89,7 +89,7 @@ jobs:
           if [ "${code:0:1}" != "2" ]; then echo "::error title=Cron::HTTP $code $(head -c 400 resp.json)"; exit 1; fi
           # one manual run to prove the function accepts the secret
           for n in 1 2 3 4; do
-            r=$(curl -sS -w ' HTTP %{http_code}' -X POST "https://$PROJECT_REF.supabase.co/functions/v1/reminders" -H "x-cron-secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{}')
+            r=$(curl -sS -w ' HTTP %{http_code}' -X POST "https://$PROJECT_REF.supabase.co/functions/v1/reminders" -H "Content-Type: application/json" -d "{\"secret\":\"$CRON_SECRET\"}")
             case "$r" in *"HTTP 200"*) break;; esac; sleep 15
           done
           echo "reminders test: $r"

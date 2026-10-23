@@ -1,5 +1,5 @@
-// All scheduled notifications. Called every 5 minutes by Supabase Cron with the header
-// `x-cron-secret: <CRON_SECRET>`.
+// All scheduled notifications. Called every 5 minutes by Supabase Cron with the body
+// `{"secret": <CRON_SECRET>}` (the cron job reads it from Supabase Vault).
 //   1. Medication: at the dose time, and again after 60 min if still unrecorded.
 //   2. Azkar: morning (leaving home) and evening (coming back) at the chosen time and days.
 //      Tapping the notification walks through the azkar one by one (handled in sw.js).
@@ -163,7 +163,10 @@ async function review(): Promise<number> {
 Deno.serve(async (req) => {
   // trimmed on both sides: a secret pasted with a trailing newline must still match
   const secret = (Deno.env.get("CRON_SECRET") ?? "").trim();
-  const given = (req.headers.get("x-cron-secret") ?? "").trim();
+  // the secret comes in the JSON body (the platform was altering the custom header); header kept as fallback
+  let body: { secret?: string } = {};
+  try { body = await req.json(); } catch { /* empty body */ }
+  const given = String(body.secret ?? req.headers.get("x-cron-secret") ?? "").trim();
   // lengths only, never values: tells a missing server secret apart from a wrong/missing header
   if (!secret || given !== secret) return new Response(`forbidden (server ${secret.length}, header ${given.length})`, { status: 403 });
   const pub = Deno.env.get("VAPID_PUBLIC_KEY"), priv = Deno.env.get("VAPID_PRIVATE_KEY");
