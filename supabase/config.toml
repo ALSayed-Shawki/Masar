@@ -11,3 +11,4 @@ verify_jwt = false
 [functions.med-reminders]
 verify_jwt = false
 
+
