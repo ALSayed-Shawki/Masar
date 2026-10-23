@@ -437,3 +437,15 @@ create policy receipts_insert on storage.objects for insert to authenticated
 
 -- live updates for the group screens
 alter publication supabase_realtime add table public.expenses, public.settlements, public.group_members;
+
+-- ---------------------------------------------------------------------------
+-- explicit API grants (works whether or not "automatically expose new tables" is on).
+-- RLS above still decides which rows each user can touch.
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on
+  public.projects, public.tasks, public.notes, public.wins, public.money_entries, public.goals,
+  public.weeks, public.day_logs, public.settings, public.medications, public.push_subscriptions,
+  public.groups, public.group_members, public.expenses, public.settlements
+  to authenticated;
+revoke all on public.member_pins, public.reminder_log from anon, authenticated;
