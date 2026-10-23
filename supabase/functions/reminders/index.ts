@@ -4,6 +4,7 @@
 //   2. Azkar: morning (leaving home) and evening (coming back) at the chosen time and days.
 //      Tapping the notification walks through the azkar one by one (handled in sw.js).
 //   3. AI check-ins ("nudges"): short playful questions during active hours; replies go to the chat.
+//   4. Evening review: what is still open from today → open the app to move it to tomorrow / later.
 // Each notification is logged once per day, so overlapping runs never double-send.
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 import webpush from "npm:web-push@3.6.7";
@@ -114,11 +115,14 @@ async function nudges(): Promise<number> {
     const done = (tasks ?? []).filter(t => t.status === "done").map(t => t.title);
     const open = (tasks ?? []).filter(t => t.status === "todo").map(t => t.title);
     const hh = String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+    const { data: brainRow } = await sb.from("settings").select("value").eq("owner_id", r.owner_id).eq("key", "brain").maybeSingle();
+    const brain = String((brainRow?.value as { text?: string } | null)?.text ?? "").slice(0, 4000);
     const history = (recent ?? []).slice().reverse().map(m => `${m.role === "user" ? "سيد" : "أنت"}: ${m.text}`).join("\n");
     const prompt = `أنت رفيق سيد في تطبيق "مسار": صاحب جدع، دمه خفيف، بيرخّم عليه بحب عشان يوصل لأحسن نسخة من نفسه وأحسن روتين.
 اكتب رسالة إشعار واحدة قصيرة (أقل من 110 حرف) بالعامية المصرية، فيها سؤال يخليه يرد. نوّع ومتكررش اللي فات. ممكن تناديه "يا برنس" أو "يا هندسة" أحيانًا مش دايمًا.
 استخدم الواقع: الساعة دلوقتي ${hh}. اتقفل النهارده: ${done.join(" | ") || "ولا حاجة لسه"}. لسه مفتوح ومهم: ${open.slice(0, 4).join(" | ") || "-"}.
 الصلاة النهارده: ${JSON.stringify(day?.prayers ?? {})}. المزاج: ${day?.mood ?? "-"}. الأذكار: ${JSON.stringify(day?.azkar ?? {})}.
+خلفية عنه: ${brain || "-"}
 آخر كلام بينكم (خده في اعتبارك وكمّل عليه لو مناسب):
 ${history || "مفيش"}
 ممنوع: الوعظ الطويل، اللوم الجارح، الإيموجي الكتير (واحد بالكتير). اكتب الرسالة بس.`;
@@ -137,6 +141,23 @@ ${history || "مفيش"}
   return sent;
 }
 
+type ReviewCfg = { enabled?: boolean; time?: string; tz?: string };
+async function review(): Promise<number> {
+  let sent = 0;
+  const { data: rows } = await sb.from("settings").select("owner_id,value").eq("key", "review");
+  for (const r of rows ?? []) {
+    const cfg = r.value as ReviewCfg;
+    if (cfg.enabled === false) continue;
+    const { date, minutes } = localNow(cfg.tz || TZ_DEFAULT);
+    if (!inWindow(minutes, cfg.time || "20:30")) continue;
+    const { count } = await sb.from("tasks").select("id", { count: "exact", head: true }).eq("owner_id", r.owner_id).eq("status", "todo").lte("due", date);
+    if (!count) continue;
+    if (!(await onceToday(r.owner_id, "review", date))) continue;
+    sent += await push(r.owner_id, { type: "review", title: "آخر اليوم", body: `فاضل ${count} ${count > 2 && count < 11 ? "حاجات" : "حاجة"} مخلصتش. ننقلهم لبكرة ولا لإمتى؟`, tag: "review", url: "./#/review" });
+  }
+  return sent;
+}
+
 Deno.serve(async (req) => {
   const secret = Deno.env.get("CRON_SECRET");
   if (!secret || req.headers.get("x-cron-secret") !== secret) return new Response("forbidden", { status: 403 });
@@ -144,7 +165,7 @@ Deno.serve(async (req) => {
   if (!pub || !priv) return new Response("push not configured", { status: 503 });
   webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") ?? "mailto:masar@example.com", pub, priv);
   const out: Record<string, number | string> = {};
-  for (const [name, fn] of Object.entries({ medications, azkar, nudges })) {
+  for (const [name, fn] of Object.entries({ medications, azkar, nudges, review })) {
     try { out[name] = await fn(); } catch (e) { out[name] = "error: " + String((e as Error).message ?? e); }
   }
   return new Response(JSON.stringify({ ok: true, ...out }), { headers: { "Content-Type": "application/json" } });

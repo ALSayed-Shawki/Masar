@@ -12,3 +12,7 @@ verify_jwt = false
 verify_jwt = false
 
 
+
+# remote MCP server for Claude.ai; auth is the secret token in the URL path
+[functions.mcp]
+verify_jwt = false

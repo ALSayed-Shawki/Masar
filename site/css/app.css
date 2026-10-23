@@ -222,6 +222,30 @@ ul.coach{margin:0;padding-inline-start:18px;display:grid;gap:4px;font-size:14px}
 .times{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .times input[type=time]{width:auto;min-width:7.5em}
 
+/* --- work console, projects, review --- */
+.quickadd{display:grid;gap:8px;border-color:var(--accent)}
+.qa-row{display:flex;gap:8px;align-items:center}
+.qa-row input:not([type=checkbox]),.qa-row select{flex:1;min-width:0}
+.qa-kind{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);white-space:nowrap}
+.progress-line{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px;padding:0 2px}
+.donecard summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:center}
+.donecard summary::-webkit-details-marker{display:none}
+.donecard[open] summary{margin-bottom:6px}
+.warnc{background:var(--gold-soft);border-color:transparent}
+.plink{color:inherit;text-decoration:none;border-bottom:1px dashed var(--line)}
+.chip.req{background:var(--gold-soft);color:var(--gold);font-weight:600}
+.pcard{display:grid;gap:4px;text-decoration:none;color:inherit}
+.pill.st-active{background:var(--pos-soft);color:var(--pos)} .pill.st-prospect{background:var(--gold-soft);color:var(--gold)}
+.pill.st-paused{background:var(--sunk);color:var(--muted)} .pill.st-done{background:var(--sunk);color:var(--muted)}
+.next{margin:4px 0 0;font-size:14px;color:var(--accent);font-weight:500}
+.grouph{font-family:var(--f-display);font-weight:500;font-size:15px;color:var(--muted);margin:6px 2px 0}
+.scope{white-space:pre-wrap;font-size:14px;line-height:1.8}
+.pchat{max-height:none;margin:8px 0}
+.pchat .msg{max-width:100%}
+.rv .tt{margin:0}
+.rv-acts{margin-top:8px}
+.rv-acts input[type=date]{width:auto;padding:3px 6px;font-size:13px}
+
 /* report rendered offscreen, then captured as an image */
 #report-stage{position:fixed;left:-10000px;top:0;width:720px;pointer-events:none}
 .report{width:720px;background:#FFFDF8;color:#231C12;font-family:var(--f-body);padding:36px;direction:rtl;display:grid;gap:18px}

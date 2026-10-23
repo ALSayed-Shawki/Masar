@@ -1,12 +1,12 @@
-// Today: week progress, focus, top 3, carried tasks, coach notes, prayers (accountability only),
-// medication check-ins and the evening mood check-in.
+// Today = the work console: quick-add today's requests per project, tick them off with a note,
+// evening review to move what didn't close; plus prayers, azkar, medication and the mood check-in.
 import { esc, toast, openSheet, closeSheet, seg, segV, val, registerActions } from '../../core/dom.js';
 import { today, addDays, weekStart, nowHM, hmPlus, normHM, pd, fmtWeekday, fmtFull, fmtHijri } from '../../core/dates.js';
 import { azkarCard } from '../azkar/view.js';
 import { lastNudge } from '../chat/view.js';
 import { errText } from '../../core/supa.js';
 import { CONFIG } from '../../config.js';
-import { P, saveDay, saveWeek, update, refresh, openTasks, doneDate } from '../../core/store.js';
+import { P, saveDay, saveWeek, update, insert, refresh, openTasks, doneDate } from '../../core/store.js';
 import { sb } from '../../core/supa.js';
 import { taskList, byDue } from '../tasks/view.js';
 
@@ -59,15 +59,16 @@ function medCard() {
 
 export function renderToday(root, rerender) {
   UI.rerender = rerender;
-  const st = weekStats(), td = st.td, open = openTasks();
-  const h = new Date().getHours(), greet = h < 12 ? 'صباح الخير يا سيد' : h < 17 ? 'يومك ماشي إزاي يا سيد؟' : 'مساء الخير يا سيد';
-  const diff = st.done.length - st.prev.length;
-  const line = st.done.length ? `أنجزت <b class="num">${st.done.length}</b> مهمة الأسبوع ده${st.prev.length ? (diff >= 0 ? `، أكتر من اللي فات بـ <b class="num">${diff}</b>` : `، أقل من اللي فات بـ <b class="num">${-diff}</b>`) : ''}.` : 'الأسبوع لسه بادئ. أول مهمة تخلصها هتفتح العداد.';
-  const focus = P.tasks.filter(t => t.focus_date === td).sort((a, b) => (a.status === 'done') - (b.status === 'done'));
-  const dueToday = open.filter(t => t.due === td && t.focus_date !== td).sort(byDue);
-  const carried = open.filter(t => t.due && t.due < td).sort(byDue);
-  const inbox = open.filter(t => !t.due).length;
-  const wk = (P.weeks[st.ws]?.focus || []).filter(Boolean), day = P.days[td];
+  const td = today(), open = openTasks(), st = weekStats();
+  // the work board: anything due today or earlier, or starred for today
+  const board = open.filter(t => (t.due && t.due <= td) || t.focus_date === td).sort(byDue);
+  const doneToday = P.tasks.filter(t => doneDate(t) === td);
+  const groups = new Map();
+  board.forEach(t => { const k = t.project_id || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+  const work = P.projects.filter(p => p.status !== 'done' && (p.area === 'work' || p.area === 'business'));
+  let last = ''; try { last = localStorage.getItem('masar.lastProject') || ''; } catch {}
+  const hour = new Date().getHours(), lateToday = board.length;
+  const day = P.days[td], nudge = lastNudge();
 
   const notes = [];
   const lateDoses = doses().filter(x => !(day?.meds || {})[x.key] && nowHM() >= hmPlus(x.t, 60));
@@ -75,35 +76,66 @@ export function renderToday(root, rerender) {
   const yp = P.days[addDays(td, -1)]?.prayers || {}, ym = PRAYERS.filter(([k]) => yp[k] === 'missed').length;
   if (ym) notes.push(`فاتك ${ym} ${ym > 1 ? 'فروض' : 'فرض'} امبارح. اقضيهم النهارده، وسجّل القضاء من الميزان.`);
   open.filter(t => (t.rolled || 0) >= 3).slice(0, 2).forEach(t => notes.push(`«${esc(t.title)}» اترحّلت ${t.rolled} مرات. قسّمها لخطوة أصغر أو خد قرار تلغيها.`));
-  const noDod = open.filter(t => !t.dod && (t.priority || 1) >= 2).length;
-  if (noDod) notes.push(`${noDod} مهام مهمة من غير تعريف إنجاز. من غيره مش هتعرف امتى خلصت.`);
-  const projs = new Set(st.doneToday.map(t => t.project_id).filter(Boolean));
+  const projs = new Set(doneToday.map(t => t.project_id).filter(Boolean));
   if (projs.size >= 4) notes.push(`اشتغلت النهارده على ${projs.size} مشاريع. التنقل الكتير بياكل التركيز؛ جمّع شغل كل مشروع في بلوك واحد.`);
-  if (inbox > 10) notes.push(`عندك ${inbox} مهمة من غير موعد. خصص 10 دقايق تفرزها: موعد، تفويض، أو حذف.`);
 
-  const nudge = lastNudge();
+  const block = (pid, items) => { const p = P.projects.find(x => x.id === pid);
+    return `<section class="card"><div class="sh"><h2>${p ? `<a class="plink" href="#/project/${p.id}">${esc(p.name)}</a>` : 'من غير مشروع'}</h2><span class="count num">${items.length}</span></div>${taskList(items)}</section>`; };
+
   root.innerHTML = `
   <section class="datebar"><span class="wd">النهارده ${fmtWeekday(td)}</span><span>${fmtFull(td)}</span><span class="hint">${fmtHijri(td)}</span></section>
-  <section class="card soft hero-grid"><div><h1 class="big">${greet}</h1><p style="margin:4px 0 0;font-size:14px">${line}</p>
-    <span class="streak">سلسلة الأيام المنظمة <b class="num">${st.streak}</b> يوم</span></div>${ring(st.pct)}</section>
+  <form class="card quickadd" id="qa" autocomplete="off">
+    <div class="qa-row"><select id="qa-proj" aria-label="المشروع"><option value="">من غير مشروع</option>${work.map(p => `<option value="${p.id}" ${p.id === last ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+    <label class="qa-kind"><input type="checkbox" id="qa-req" checked> طلب النهارده</label></div>
+    <div class="qa-row"><input id="qa-text" placeholder="اتطلب منك إيه؟ أو حاجة لازم تخلص…" enterkeyhint="done"><button class="btn primary" type="submit">إضافة</button></div>
+  </form>
+  ${hour >= 19 && lateToday ? `<a class="card linkcard warnc" href="#/review"><span><b>آخر اليوم</b><br><span class="hint">فاضل ${lateToday} مخلصتش. ننقلهم لإمتى؟</span></span><span class="go">راجع</span></a>` : ''}
+  <div class="progress-line"><span>خلصت <b class="num">${doneToday.length}</b> من <b class="num">${doneToday.length + board.length}</b> النهارده</span><span class="hint">الأسبوع: <b class="num">${st.done.length}</b> · <a class="link" href="#/ledger">الميزان</a></span></div>
+  ${groups.size ? [...groups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1)).map(([pid, items]) => block(pid, items)).join('') : '<section class="card"><p class="empty">مفيش حاجة مستحقة النهارده. سجّل أي طلب يجيلك من فوق، أو اختار من المهام بالنجمة ★.</p></section>'}
+  ${doneToday.length ? `<details class="card donecard"><summary><b>اللي خلص النهارده</b> <span class="num">${doneToday.length}</span></summary>${doneToday.map(t => `<div class="item"><p>✓ ${esc(t.title)}${t.project_id ? ` <span class="chip">${esc(P.projects.find(p => p.id === t.project_id)?.name || '')}</span>` : ''}</p>${t.done_note ? `<p class="hint">${esc(t.done_note)}</p>` : `<button class="mini" data-act="tdNote" data-id="${t.id}">ضيف ملاحظة</button>`}</div>`).join('')}</details>` : ''}
   ${notes.length ? `<section class="card warn"><div class="sh"><h2>انتبه</h2></div><ul class="coach">${notes.slice(0, 4).map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}
-  <section class="card"><div class="sh"><h2>أهم 3 النهارده</h2><span class="count num">${focus.filter(t => t.status === 'done').length}/${focus.length || 3}</span></div>
-    ${focus.length ? taskList(focus) : '<p class="empty">دوس النجمة ★ جنب أي مهمة عشان تختارها من أهم 3.</p>'}</section>
   ${nudge ? `<a class="card linkcard" href="#/chat"><span><b>رفيقك بيسأل</b><br><span class="hint">${esc(nudge.text.slice(0, 90))}</span></span><span class="go">رد</span></a>` : ''}
   ${prayerCard()}
   ${azkarCard()}
   ${medCard()}
-  ${dueToday.length ? `<section class="card"><div class="sh"><h2>مستحقة النهارده</h2><span class="count num">${dueToday.length}</span></div>${taskList(dueToday)}</section>` : ''}
-  ${carried.length ? `<section class="card"><div class="sh"><h2>مترحّلة من أيام فاتت</h2><button class="link" data-act="tdCarryAll">انقل الكل للنهارده</button></div>${taskList(carried.slice(0, 8))}${carried.length > 8 ? `<p class="hint">و${carried.length - 8} كمان في المهام.</p>` : ''}</section>` : ''}
-  <section class="card"><div class="sh"><h2>تركيز الأسبوع</h2><button class="link" data-act="tdWeek">${wk.length ? 'تعديل' : 'حدّده'}</button></div>
-    ${wk.length ? `<ul class="coach">${wk.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : '<p class="empty">اختار من هدف لتلاتة يبقوا محور الأسبوع. لو حصل طارئ غيّرهم بوعي.</p>'}</section>
   <section class="card"><div class="sh"><h2>تسجيل اليوم</h2><button class="link" data-act="tdCheckin">${day?.mood ? 'تعديل' : 'سجّل'}</button></div>
-    ${day?.mood ? `<p style="margin:0">المزاج <b class="num">${day.mood}/5</b> (${MOOD[day.mood] || ''}) · الطاقة <b class="num">${day.energy}/5</b>${day.word ? ` · «${esc(day.word)}»` : ''}</p>${day.highlight ? `<p class="hint">${esc(day.highlight)}</p>` : ''}` : '<p class="empty">آخر اليوم: مزاجك وطاقتك من 1 لـ5 وكلمة تلخص اليوم. دقيقة واحدة.</p>'}</section>
-  ${inbox ? `<a class="card linkcard" href="#/tasks"><span><b>الـInbox</b><br><span class="hint">${inbox} مهمة من غير موعد</span></span><span class="go">افرزها</span></a>` : ''}
-  <a class="card linkcard" href="#/shela"><span><b>حساب الشلة</b><br><span class="hint">مين عليه ومين ليه</span></span><span class="go">افتح</span></a>`;
+    ${day?.mood ? `<p style="margin:0">المزاج <b class="num">${day.mood}/5</b> (${MOOD[day.mood] || ''}) · الطاقة <b class="num">${day.energy}/5</b>${day.word ? ` · «${esc(day.word)}»` : ''}</p>` : '<p class="empty">آخر اليوم: مزاجك وطاقتك من 1 لـ5 وكلمة تلخص اليوم.</p>'}</section>
+  <section class="card"><div class="sh"><h2>تركيز الأسبوع</h2><button class="link" data-act="tdWeek">${(P.weeks[st.ws]?.focus || []).length ? 'تعديل' : 'حدّده'}</button></div>
+    ${(P.weeks[st.ws]?.focus || []).length ? `<ul class="coach">${P.weeks[st.ws].focus.map(f => `<li>${esc(f)}</li>`).join('')}</ul>` : '<p class="empty">من هدف لتلاتة يبقوا محور الأسبوع.</p>'}</section>`;
+
+  root.querySelector('#qa').addEventListener('submit', async e => {
+    e.preventDefault();
+    const title = val('qa-text'); if (!title) return;
+    const project_id = val('qa-proj') || null, request = document.getElementById('qa-req').checked;
+    try { localStorage.setItem('masar.lastProject', project_id || ''); } catch {}
+    try { await insert('tasks', { title, project_id, kind: request ? 'request' : 'task', due: td, priority: 1 }); toast('اتسجل'); setTimeout(() => document.getElementById('qa-text')?.focus(), 50); }
+    catch (x) { toast(errText(x)); }
+  });
+}
+
+/* evening review: move what didn't close today */
+export function renderReview(root, rerender) {
+  UI.rerender = rerender;
+  const td = today(), items = openTasks().filter(t => t.due && t.due <= td).sort(byDue);
+  const sat = (() => { let d = addDays(td, 1); while (pd(d).getDay() !== 6) d = addDays(d, 1); return d; })();
+  root.innerHTML = `<section class="card soft"><h1 class="big">آخر اليوم</h1><p class="hint" style="margin:4px 0 0">${items.length ? `فاضل ${items.length} مخلصتش. كل واحدة ننقلها لإمتى؟` : 'كله خلص. يوم محترم 👏'}</p></section>
+  ${items.length > 1 ? `<div class="actions"><button class="btn ghost sm" data-act="rvAll" data-to="${addDays(td, 1)}">الكل لبكرة</button></div>` : ''}
+  ${items.map(t => `<section class="card rv"><p class="tt"><b>${esc(t.title)}</b></p><div class="meta">${t.project_id ? `<span class="chip">${esc(P.projects.find(p => p.id === t.project_id)?.name || '')}</span>` : ''}${t.kind === 'request' ? '<span class="chip">طلب</span>' : ''}${t.due < td ? `<span class="due over">من ${t.due}</span>` : ''}${t.rolled ? `<span class="rolled">اترحّلت ${t.rolled}</span>` : ''}</div>
+    <div class="actions rv-acts"><button class="mini" data-act="rvMove" data-id="${t.id}" data-to="${addDays(td, 1)}">بكرة</button><button class="mini" data-act="rvMove" data-id="${t.id}" data-to="${addDays(td, 2)}">بعد بكرة</button><button class="mini" data-act="rvMove" data-id="${t.id}" data-to="${sat}">السبت</button>
+    <input type="date" class="rv-date" data-id="${t.id}" min="${addDays(td, 1)}" aria-label="تاريخ تاني"><button class="mini" data-act="tkToggle" data-id="${t.id}">خلصت</button><button class="mini" data-act="rvNoDate" data-id="${t.id}">من غير موعد</button></div></section>`).join('')}
+  <a class="btn ghost block" href="#/today">رجوع لليوم</a>`;
+  root.querySelectorAll('.rv-date').forEach(i => i.addEventListener('change', () => moveTask(i.dataset.id, i.value)));
+}
+async function moveTask(id, to) {
+  const t = P.tasks.find(x => x.id === id); if (!t || !to) return;
+  try { await update('tasks', id, { due: to, rolled: (t.rolled || 0) + 1, focus_date: null }); toast('اتنقلت'); } catch (x) { toast(errText(x)); }
 }
 
 registerActions({
+  rvMove: el => moveTask(el.dataset.id, el.dataset.to),
+  rvNoDate: async el => { try { await update('tasks', el.dataset.id, { due: null, focus_date: null }); toast('اتشالت من اليوم'); } catch (x) { toast(errText(x)); } },
+  rvAll: async el => { const td = today(); try { for (const t of openTasks().filter(t => t.due && t.due <= td)) await sb.from('tasks').update({ due: el.dataset.to, rolled: (t.rolled || 0) + 1, focus_date: null }).eq('id', t.id); await refresh('tasks'); toast('اتنقلوا لبكرة'); } catch (x) { toast(errText(x)); } },
+  tdNote: el => noteSheet(el.dataset.id),
   tdDay: el => { UI.pDay = el.dataset.v; UI.rerender(); },
   tdPrayer: el => { const d = el.dataset.d, k = el.dataset.k, p = { ...(P.days[d]?.prayers || {}) }; const nx = CYCLE[(CYCLE.indexOf(p[k] || '') + 1) % CYCLE.length]; if (nx) p[k] = nx; else delete p[k]; saveDay(d, { prayers: p }).catch(x => toast(errText(x))); },
   tdDose: el => { const td = today(), m = { ...(P.days[td]?.meds || {}) }; if (el.dataset.v) m[el.dataset.k] = el.dataset.v; else delete m[el.dataset.k]; saveDay(td, { meds: m }).then(() => { if (el.dataset.v === 'taken') toast('تمام، اتسجل'); }).catch(x => toast(errText(x))); },
@@ -151,4 +183,14 @@ registerActions({
       await refresh('meds'); closeSheet(); toast('اتحفظت المواعيد');
     } catch (x) { el.disabled = false; toast(errText(x)); }
   },
+});
+
+export function noteSheet(id) {
+  const t = P.tasks.find(x => x.id === id); if (!t) return;
+  openSheet(`<h3>✓ ${esc(t.title)}</h3><label class="fld"><span>ملاحظة على اللي اتعمل (اختياري)</span><textarea id="dn-note" rows="3" placeholder="مثال: اتسلم للعميل، فاضل مراجعة الضريبة">${esc(t.done_note || '')}</textarea></label>
+  <div class="actions"><button class="btn primary" data-act="tdSaveNote" data-id="${id}" style="flex:1">حفظ الملاحظة</button><button class="btn ghost" data-act="close">من غير ملاحظة</button></div>`);
+  setTimeout(() => document.getElementById('dn-note')?.focus(), 80);
+}
+registerActions({
+  tdSaveNote: async el => { try { await update('tasks', el.dataset.id, { done_note: val('dn-note') }); closeSheet(); toast('اتحفظت'); } catch (x) { toast(errText(x)); } },
 });

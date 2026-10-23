@@ -22,7 +22,7 @@ export function taskRow(t) {
   return `<li class="task p${t.priority || 1} ${done ? 'is-done' : ''}">
   <button class="chk" data-act="tkToggle" data-id="${t.id}" aria-label="${done ? 'رجّعها مفتوحة' : 'تم'}">${done ? '✓' : ''}</button>
   <button class="tbody" data-act="tkEdit" data-id="${t.id}"><span class="tt">${esc(t.title)}</span>
-  <span class="meta">${t.project_id ? `<span class="chip">${esc(pName(t.project_id))}</span>` : ''}${t.due ? `<span class="due ${dueCls(t.due, done)}">${dueLabel(t.due)}</span>` : ''}${(t.rolled || 0) >= 2 && !done ? `<span class="rolled">اترحّلت ${t.rolled} مرات</span>` : ''}${!t.dod && !done ? '<span>بدون تعريف إنجاز</span>' : ''}</span></button>
+  <span class="meta">${t.kind === 'request' ? '<span class="chip req">طلب</span>' : ''}${t.project_id ? `<span class="chip">${esc(pName(t.project_id))}</span>` : ''}${t.due ? `<span class="due ${dueCls(t.due, done)}">${dueLabel(t.due)}</span>` : ''}${(t.rolled || 0) >= 2 && !done ? `<span class="rolled">اترحّلت ${t.rolled} مرات</span>` : ''}${!t.dod && !done ? '<span>بدون تعريف إنجاز</span>' : ''}</span></button>
   ${done ? '<span></span>' : `<button class="star ${star ? 'on' : ''}" data-act="tkFocus" data-id="${t.id}" aria-label="${star ? 'شيلها من أهم 3' : 'ضيفها لأهم 3 النهارده'}">★</button>`}</li>`;
 }
 export const taskList = a => `<ul class="tl">${a.map(taskRow).join('')}</ul>`;
@@ -75,7 +75,8 @@ registerActions({
       else {
         await update('tasks', t.id, { status: 'done', done_at: new Date().toISOString() });
         const n = P.tasks.filter(x => doneDate(x) === today()).length;
-        toast(n >= 3 ? `${n} مهام النهارده. كمّل كده.` : 'تمت ✓');
+        toast(n >= 3 ? `${n} النهارده. كمّل كده.` : 'تمت ✓');
+        (await import('../today/view.js')).noteSheet(t.id);
       }
     } catch (x) { toast(errText(x)); }
   },

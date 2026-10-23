@@ -32,7 +32,7 @@ const Q = {
   weeks: () => sb.from('weeks').select('*').gte('start', addDays(today(), -120)),
   settings: () => sb.from('settings').select('*'),
   meds: () => sb.from('medications').select('*').order('created_at'),
-  chat: () => sb.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(60),
+  chat: () => sb.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(200),
 };
 const SHAPE = {
   days: a => Object.fromEntries(a.map(x => [x.date, x])),
@@ -57,6 +57,7 @@ export async function loadAll() {
     await sb.from('settings').upsert({ owner_id: P.uid, key: 'seeded', value: { at: new Date().toISOString() } });
     await Promise.all(['projects', 'goals', 'settings'].map(fetchKey));
   }
+  if (!P.settings.review) await sb.from('settings').upsert({ owner_id: P.uid, key: 'review', value: { enabled: true, time: '20:30', tz: 'Asia/Riyadh' } }).then(() => fetchKey('settings'));
   P.loaded = true;
   emit();
 }

@@ -1,5 +1,6 @@
 // AI helper for the owner only. The Anthropic key never leaves the server.
-// POST { task: "capture" | "polish" | "review" | "suggest" | "cv", input: string, context?: object }
+// POST { task: "capture" | "polish" | "review" | "suggest" | "cv" | "chat" | "project", input: string, context?: object }
+// Every prompt is prefixed with the saved "brain" (settings.brain) so answers know Sayed's context.
 import { createClient } from "npm:@supabase/supabase-js@2.49.4";
 import { cors, json } from "../_shared/cors.ts";
 
@@ -51,6 +52,13 @@ ${input}`,
 ${ctx.history ?? '-'}
 سيد دلوقتي: ${input}`,
   },
+  project: {
+    model: SMART, max: 1400,
+    prompt: (input, ctx) => `أنت المستشار اللي ماسك مع سيد مشروع "${ctx.project_name ?? ''}". ${STYLE}
+اعتمد على الـScope والمهام والملاحظات اللي تحت بس. لو معلومة ناقصة قول إنها ناقصة واسأل عنها.
+
+${input}`,
+  },
   cv: {
     model: SMART, max: 1500,
     prompt: (input) => `حوّل الإنجازات دي لنقاط CV احترافية بالإنجليزي ثم بالعربي، لاستشاري Odoo ERP ومحاسب. فعل قوي + ما تم + الأثر. متضيفش أرقام مش مذكورة.
@@ -76,10 +84,16 @@ Deno.serve(async (req) => {
   const t = TASKS[body.task ?? ""];
   if (!t || !body.input || body.input.length > 60000) return json({ error: "bad_request" }, 400);
 
+  // The "brain": what Sayed saved about himself (Settings → العقل المدبر), read as him (RLS).
+  const asUser = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: `Bearer ${token}` } } });
+  const { data: brainRow } = await asUser.from("settings").select("value").eq("key", "brain").maybeSingle();
+  const brain = String((brainRow?.value as { text?: string } | null)?.text ?? "").slice(0, 12000);
+  const content = (brain && body.task !== "polish" ? `معلومات ثابتة عن سيد وشغله (استخدمها كخلفية، ومتكررهاش):\n${brain}\n\n---\n\n` : "") + t.prompt(body.input, body.context ?? {});
+
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: t.model, max_tokens: t.max, messages: [{ role: "user", content: t.prompt(body.input, body.context ?? {}) }] }),
+    body: JSON.stringify({ model: t.model, max_tokens: t.max, messages: [{ role: "user", content }] }),
   });
   if (!r.ok) return json({ error: "upstream", status: r.status }, 502);
   const data = await r.json();

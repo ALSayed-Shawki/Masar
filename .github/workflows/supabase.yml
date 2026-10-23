@@ -46,7 +46,7 @@ jobs:
         run: |
           set +e
           fail=0
-          for f in ai push-config reminders; do
+          for f in ai push-config reminders mcp; do
             supabase functions deploy "$f" --project-ref "$PROJECT_REF" --use-api 2>&1 | tee "fn-$f.log"
             if [ "${PIPESTATUS[0]}" -ne 0 ]; then fail=1; tail -5 "fn-$f.log" | while read -r l; do echo "::error title=Function $f::$l"; done; fi
           done

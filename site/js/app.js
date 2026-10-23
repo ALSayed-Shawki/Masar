@@ -6,7 +6,7 @@ import { $, actions, closeSheet, sheetOpen } from './core/dom.js';
 import { configured, sb, getSession, isAnon, errText } from './core/supa.js';
 import { fmtDay, fmtWeekday, today } from './core/dates.js';
 import { renderLogin, renderNotConfigured } from './modules/auth/view.js';
-import { renderToday } from './modules/today/view.js';
+import { renderToday, renderReview } from './modules/today/view.js';
 import { renderTasks } from './modules/tasks/view.js';
 import { renderLedger } from './modules/ledger/view.js';
 import { renderIdeas } from './modules/ideas/view.js';
@@ -14,6 +14,8 @@ import { renderMoney } from './modules/money/view.js';
 import { openCapture } from './modules/capture/view.js';
 import { renderAzkar, syncAzkarCache } from './modules/azkar/view.js';
 import { renderChat } from './modules/chat/view.js';
+import { renderProjects, renderProject } from './modules/projects/view.js';
+import { renderMore } from './modules/more/view.js';
 import { renderSettings } from './modules/settings/view.js';
 import { P, loadAll, onP } from './core/store.js';
 import { renderShela, renderJoin } from './modules/shela/views.js';
@@ -30,10 +32,13 @@ const ICONS = {
   ledger: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   ideas: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/></svg>',
   chat: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/></svg>',
+  projects: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
+  more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
   money: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20M16 15h2"/></svg>',
 };
-const TABS = [['today', 'اليوم'], ['tasks', 'المهام'], ['ledger', 'الميزان'], ['ideas', 'الأفكار'], ['money', 'الماليات']];
-const PAGES = { azkar: renderAzkar, chat: renderChat, today: renderToday, tasks: renderTasks, ledger: renderLedger, ideas: renderIdeas, money: renderMoney, settings: renderSettings };
+const TABS = [['today', 'اليوم'], ['projects', 'المشاريع'], ['tasks', 'المهام'], ['ledger', 'الميزان'], ['more', 'المزيد']];
+const TAB_OF = { project: 'projects', ideas: 'more', money: 'more', shela: 'more', azkar: 'more', chat: 'more', review: 'today', settings: 'more' };
+const PAGES = { projects: renderProjects, project: renderProject, review: renderReview, more: renderMore, azkar: renderAzkar, chat: renderChat, today: renderToday, tasks: renderTasks, ledger: renderLedger, ideas: renderIdeas, money: renderMoney, settings: renderSettings };
 
 let session = null;
 const route = () => (location.hash.replace(/^#\/?/, '') || (MODE === 'shela' ? 'shela' : 'today')).split('/');
@@ -77,7 +82,7 @@ async function renderInner() {
 
   // owner app
   if (!session || isAnon(session)) { setTabs(false); $('#fab').hidden = true; return renderLogin(view, async () => { session = await getSession(); location.hash = '#/today'; render(); }); }
-  setTabs(true, page === 'shela' ? 'money' : page);
+  setTabs(true, TAB_OF[page] || page);
   const ic = k => ICONS[k].replace('<svg', '<svg width="18" height="18" style="vertical-align:-4px;fill:none;stroke:currentColor;stroke-width:1.8"');
   $('#top-right').innerHTML = `<span class="actions"><button class="who" data-act="nav" data-v="chat" aria-label="رفيقك">${ic('chat')}</button><button class="who" data-act="nav" data-v="settings" aria-label="الإعدادات">${ic('settings')}</button></span>`;
   if (page === 'shela') {
@@ -86,7 +91,7 @@ async function renderInner() {
   }
   const fab = $('#fab'); fab.hidden = page === 'settings'; fab.textContent = '+'; fab.dataset.act = 'capture'; fab.classList.add('round');
   if (!P.loaded) { view.innerHTML = '<section class="card"><div class="skel"></div><div class="skel" style="width:70%"></div></section>'; await loadAll(); syncAzkarCache(); }
-  if (page === 'azkar' || page === 'chat') fab.hidden = true;
+  if (['azkar', 'chat', 'more', 'project', 'review'].includes(page)) fab.hidden = true;
   return (PAGES[page] || renderToday)(view, render, arg);
 }
 
@@ -103,7 +108,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen(
 addEventListener('hashchange', () => { if (sheetOpen()) closeSheet(); render(); scrollTo(0, 0); });
 let pending = false;
 onChange(() => { const [p] = route(); if (MODE === 'shela' || p === 'shela') { if (sheetOpen()) pending = true; else render(); } });
-onP(() => { const [p] = route(); if (MODE === 'masar' && p !== 'shela' && p !== 'settings') { if (sheetOpen()) pending = true; else render(); } });
+onP(() => { const [p] = route(); if (MODE === 'masar' && p !== 'shela' && p !== 'settings' && p !== 'more') { if (sheetOpen()) pending = true; else render(); } });
 document.addEventListener('sheetclosed', () => { if (pending) { pending = false; render(); } });
 
 let shownDay = today();

@@ -11,6 +11,7 @@ const SHELL = [
   './js/core/store.js', './js/core/ai.js', './js/modules/tasks/view.js', './js/modules/capture/view.js',
   './js/modules/ledger/view.js', './js/modules/ideas/view.js', './js/modules/money/view.js',
   './js/modules/azkar/view.js', './js/modules/azkar/library.js', './js/modules/chat/view.js',
+  './js/modules/projects/view.js', './js/modules/more/view.js',
   './manifest-masar.webmanifest', './manifest-shela.webmanifest',
   './icons/masar-192.png', './icons/shela-192.png', './icons/badge-96.png',
 ];

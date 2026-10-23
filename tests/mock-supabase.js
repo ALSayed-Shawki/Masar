@@ -35,7 +35,7 @@ class Q {
   run() {
     const rows = T[this.t] || (T[this.t] = []);
     if (this.op === 'insert') {
-      const add = p => { const r = { id: 'x' + (n++), created_at: new Date().toISOString(), owner_id: uid, deleted: false, status: 'todo', active: true, rolled: 0, priority: 1, progress: 0, dod: '', ...p }; rows.push(r); return r; };
+      const add = p => { const r = { id: 'x' + (n++), created_at: new Date().toISOString(), owner_id: uid, deleted: false, status: this.t === 'projects' ? 'active' : 'todo', active: true, kind: 'task', done_note: '', scope: '', client: '', next_step: '', project_id: null, rolled: 0, priority: 1, progress: 0, dod: '', ...p }; rows.push(r); return r; };
       const out = Array.isArray(this.payload) ? this.payload.map(add) : add(this.payload);
       return { data: this.one ? out : [].concat(out), error: null };
     }
@@ -74,7 +74,7 @@ export function createClient() {
       if (name !== 'ai') return { data: { publicKey: 'x' }, error: null };
       const t = o.body.task;
       const text = t === 'capture' ? JSON.stringify([{ kind: 'task', title: 'تجهيز تقرير أعمار الديون لعميل أكناف', dod: 'التقرير متسلم', due: '', priority: 2 }, { kind: 'expense', title: 'غدا', amount: 45, currency: 'SAR', category: 'أكل وبيت' }, { kind: 'idea', title: 'باقة Odoo جاهزة للمخابز' }])
-        : t === 'chat' ? 'تمام يا هندسة، كمّل كده. فاضلك إيه النهارده؟' : t === 'polish' ? JSON.stringify({ title: 'مراجعة تقرير المبيعات', dod: 'اتبعت للعميل', note: '' }) : '## الخلاصة\n- أسبوع كويس';
+        : t === 'project' ? '## الخلاصة\n- المشروع ماشي، فاضل التقارير.\n## الخطوات\n1. تسليم تقرير المخزون' : t === 'chat' ? 'تمام يا هندسة، كمّل كده. فاضلك إيه النهارده؟' : t === 'polish' ? JSON.stringify({ title: 'مراجعة تقرير المبيعات', dod: 'اتبعت للعميل', note: '' }) : '## الخلاصة\n- أسبوع كويس';
       return { data: { text }, error: null };
     } },
   };

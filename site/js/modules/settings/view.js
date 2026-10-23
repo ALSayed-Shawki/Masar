@@ -2,7 +2,7 @@
 import { $, esc, toast, openSheet, closeSheet, val, registerActions, confirmTap, copyText, waLink } from '../../core/dom.js';
 import { sb, errText } from '../../core/supa.js';
 import { pushState, enablePush, testNotification, isIOS, isStandalone } from '../../core/push.js';
-import { P, setSetting } from '../../core/store.js';
+import { P, setSetting, refresh } from '../../core/store.js';
 import { CONFIG } from '../../config.js';
 import { G, load, findMyGroupId, createGroup, addMember, renameMember, unbindMember, setPin, newInvite, inviteLink, updateGroup } from '../shela/data.js';
 
@@ -26,6 +26,15 @@ export async function renderSettings(root, rerender) {
     <div class="row2"><label class="fld"><span>كل كام ساعة</span><select id="nd-every">${[2, 3, 4, 5].map(h => `<option value="${h}" ${(n.every || 3) === h ? 'selected' : ''}>كل ${h} ساعات</option>`).join('')}</select></label><span></span></div>
     <div class="row2"><label class="fld"><span>من الساعة</span><input type="time" id="nd-from" value="${n.from || '10:00'}"></label><label class="fld"><span>لحد الساعة</span><input type="time" id="nd-to" value="${n.to || '23:00'}"></label></div>
     <div class="actions"><button class="btn primary sm" data-act="stNudges">حفظ</button><a class="btn ghost sm" href="#/chat">افتح المحادثة</a></div></section>`; })()}
+  <section class="card"><div class="sh"><h2>العقل المدبر</h2><span class="count">${((P.settings.brain || {}).text || '').length} حرف</span></div>
+    <p class="hint">كل اللي الذكاء الاصطناعي في مسار لازم يعرفه عنك وعن شغلك وطريقتك. بيتقري مع كل سؤال: المستشار، ورفيقك، والمراجعة.</p>
+    <textarea id="br-text" rows="8">${esc((P.settings.brain || {}).text || '')}</textarea>
+    <div class="actions"><button class="btn primary sm" data-act="stBrain">حفظ</button><button class="btn ghost sm" data-act="stImport">استيراد ملف</button></div></section>
+  <section class="card"><div class="sh"><h2>ربط Claude</h2></div>
+    <p class="hint">يخلي حساب Claude بتاعك (اللي عارف عنك كل حاجة) يقرأ ويحدّث مسار: المشاريع، والـScope، والمهام، والعقل المدبر.</p>
+    ${(P.settings.mcp || {}).token ? `<div class="fld"><span>رابط الـConnector</span><input readonly dir="ltr" id="mcp-url" value="${esc(CONFIG.SUPABASE_URL + '/functions/v1/mcp/' + P.settings.mcp.token)}"></div>
+    <div class="actions"><button class="btn ghost sm" data-act="stCopyMcp">نسخ الرابط</button><button class="btn ghost sm" data-act="stMcp">رابط جديد</button></div>
+    <p class="hint">في claude.ai: Settings ← Connectors ← Add custom connector، اكتب الاسم «مسار» والصق الرابط. الرابط سري؛ متشاركهوش.</p>` : '<button class="btn primary sm" data-act="stMcp">اعمل رابط الربط</button>'}</section>
   <a class="card linkcard" href="#/azkar"><span><b>الأذكار</b><br><span class="hint">اختيار أذكار الصبح والليل ومواعيدها</span></span><span class="go">افتح</span></a>
   <section class="card"><div class="sh"><h2>الشلة</h2></div>
   ${!g ? `<p class="hint">اعمل الشلة وضيف أصحابك، وكل واحد ياخد رقم سري يدخل بيه من غير حساب.</p><button class="btn primary sm" data-act="stCreate">اعمل الشلة</button>` : `
@@ -49,6 +58,32 @@ function pinSheet(memberId) {
 registerActions({
   stPush: async el => { el.disabled = true; try { await enablePush(); toast('الإشعارات اشتغلت'); } catch (x) { toast(x.message || errText(x)); } S.rerender(); },
   stNudges: async el => { el.disabled = true; try { await setSetting('nudges', { enabled: document.getElementById('nd-on').checked, every: +val('nd-every') || 3, from: val('nd-from') || '10:00', to: val('nd-to') || '23:00', tz: CONFIG.TIMEZONE }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } el.disabled = false; },
+  stBrain: async el => { el.disabled = true; try { await setSetting('brain', { text: val('br-text'), updated_at: new Date().toISOString() }); toast('اتحفظ'); } catch (x) { toast(errText(x)); } el.disabled = false; },
+  stMcp: async el => {
+    if (P.settings.mcp?.token && !confirmTap(el, 'الرابط القديم هيقف. أكّد')) return;
+    const token = [...crypto.getRandomValues(new Uint8Array(24))].map(b => b.toString(16).padStart(2, '0')).join('');
+    try { await setSetting('mcp', { token, created_at: new Date().toISOString() }); S.rerender(); toast('اتعمل الرابط'); } catch (x) { toast(errText(x)); }
+  },
+  stCopyMcp: () => copyText(document.getElementById('mcp-url').value),
+  stImport: () => openSheet(`<h3>استيراد للعقل المدبر والمشاريع</h3><p class="hint">اختار ملف الاستيراد (JSON) اللي Claude جهّزهولك. بيضيف العقل المدبر ويحدّث المشاريع بالاسم، ومش بيمسح حاجة.</p>
+    <input type="file" id="imp-file" accept="application/json,.json"><div class="actions"><button class="btn primary block" data-act="stDoImport">استيراد</button></div>`),
+  stDoImport: async el => {
+    const f = document.getElementById('imp-file')?.files?.[0]; if (!f) return toast('اختار الملف');
+    el.disabled = true;
+    try {
+      const d = JSON.parse(await f.text());
+      if (d.brain) { const old = (P.settings.brain || {}).text || ''; await setSetting('brain', { text: old && !old.includes(d.brain.slice(0, 60)) ? old + '\n\n' + d.brain : d.brain, updated_at: new Date().toISOString() }); }
+      let n = 0;
+      for (const pr of d.projects || []) {
+        if (!pr.name) continue;
+        const ex = P.projects.find(x => x.name.trim() === pr.name.trim() || (pr.aliases || []).includes(x.name));
+        const row = { client: pr.client || '', status: ['active', 'prospect', 'paused', 'done'].includes(pr.status) ? pr.status : 'active', area: pr.area || 'work', scope: pr.scope || '', next_step: pr.next_step || '', updated_at: new Date().toISOString() };
+        const q = ex ? sb.from('projects').update(row).eq('id', ex.id) : sb.from('projects').insert({ name: pr.name, sort: 50 + n, ...row });
+        const { error } = await q; if (error) throw error; n++;
+      }
+      await refresh('projects', 'settings'); closeSheet(); toast(`اتستورد العقل المدبر و${n} مشروع`); S.rerender();
+    } catch (x) { el.disabled = false; toast('الملف مش مظبوط: ' + (x.message || '')); }
+  },
   stTest: () => testNotification().catch(() => toast('مقدرتش أبعت إشعار تجربة')),
   stCreate: async el => { el.disabled = true; try { const gid = await createGroup('الشلة', 'سيد'); await load(gid); S.rerender(); } catch (x) { el.disabled = false; toast(errText(x)); } },
   stNewCode: async el => { if (!confirmTap(el, 'الكود القديم هيقف. أكّد')) return; try { await newInvite(); S.rerender(); toast('اتعمل كود جديد'); } catch (x) { toast(errText(x)); } },

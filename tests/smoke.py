@@ -37,11 +37,11 @@ with sync_playwright() as pw:
     p.click('#fab'); p.fill('#cap', 'عميل أكناف عايز تقرير، صرفت 45 غدا، فكرة باقة مخابز'); p.click('[data-act="capAI"]'); p.wait_for_selector('.capitem')
     assert p.locator('.capitem').count() == 3, 'capture did not split into 3'
     p.click('[data-act="capSave"]'); p.wait_for_timeout(600)
-    for tab in ['tasks', 'ledger', 'ideas', 'money']:
-        p.click(f'[data-act="nav"][data-v="{tab}"]'); p.wait_for_timeout(400); shot(p, f'tab-{tab}')
-    p.click('[data-act="nav"][data-v="ideas"]'); p.wait_for_timeout(400); assert 'باقة Odoo' in p.inner_text('#view'), 'idea missing: ' + p.inner_text('#view')[:200]
-    p.click('[data-act="nav"][data-v="money"]'); p.wait_for_timeout(300); assert '45' in p.inner_text('#view'), 'expense missing'
-    p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300); p.click('.chk >> nth=0'); p.wait_for_timeout(400)
+    for tab in ['tasks', 'ledger', 'ideas', 'money', 'more']:
+        p.goto(BASE + f'index.html?as=owner#/{tab}'); p.wait_for_timeout(500); shot(p, f'tab-{tab}')
+    p.goto(BASE + 'index.html?as=owner#/ideas'); p.wait_for_timeout(400); assert 'باقة Odoo' in p.inner_text('#view'), 'idea missing: ' + p.inner_text('#view')[:200]
+    p.goto(BASE + 'index.html?as=owner#/money'); p.wait_for_timeout(300); assert '45' in p.inner_text('#view'), 'expense missing'
+    p.click('[data-act="nav"][data-v="tasks"]'); p.wait_for_timeout(300); p.click('.chk >> nth=0'); p.wait_for_selector('#dn-note'); p.keyboard.press('Escape'); p.wait_for_timeout(300)
     p.click('[data-act="nav"][data-v="ledger"]'); p.wait_for_timeout(300); assert '1' in p.inner_text('.kpi .v >> nth=0'), 'done count not 1'
     # azkar: settings page, reader advances on tap and finishes
     p.goto(BASE + 'index.html?as=owner#/azkar'); p.wait_for_selector('#az-t-morning'); shot(p, 'azkar-settings')
@@ -51,6 +51,23 @@ with sync_playwright() as pw:
     p.goto(BASE + 'index.html?as=owner#/chat'); p.wait_for_selector('#chat-in'); p.fill('#chat-in', 'خلصت التقرير الحمد لله'); p.click('[data-act="chSend"]'); p.wait_for_timeout(700)
     assert 'كمّل كده' in p.inner_text('.chat'), 'no AI reply in chat'; shot(p, 'chat')
     p.goto(BASE + 'index.html?as=owner#/today'); p.wait_for_selector('.datebar'); p.click('[data-act="tdMeds"]'); p.wait_for_selector('.md-t'); shot(p, 'meds-sheet'); p.click('.sheet .x')
+    # work console: quick request, done with note, evening review
+    p.goto(BASE + 'index.html?as=owner#/today'); p.wait_for_selector('#qa-text')
+    p.fill('#qa-text', 'تعديل فاتورة المورد للأهرام'); p.press('#qa-text', 'Enter'); p.wait_for_timeout(500)
+    assert 'تعديل فاتورة المورد' in p.inner_text('#view'), 'quick request not on board'
+    shot(p, 'console')
+    p.locator('.task', has_text='تعديل فاتورة المورد').locator('.chk').click(); p.wait_for_selector('#dn-note')
+    p.fill('#dn-note', 'اتعدلت والمورد استلم'); p.click('[data-act="tdSaveNote"]'); p.wait_for_timeout(400)
+    assert 'اتعدلت والمورد استلم' in p.text_content('.donecard'), 'done note missing'
+    p.goto(BASE + 'index.html?as=owner#/review'); p.wait_for_timeout(400); shot(p, 'review')
+    if p.locator('[data-act="rvMove"]').count(): p.locator('[data-act="rvMove"]').first.click(); p.wait_for_timeout(400)
+    # projects + AI advisor
+    p.goto(BASE + 'index.html?as=owner#/projects'); p.wait_for_selector('.pcard'); shot(p, 'projects')
+    p.locator('.pcard').first.click(); p.wait_for_selector('[data-q="status"]'); p.click('[data-q="status"]'); p.wait_for_timeout(700)
+    assert 'المشروع ماشي' in p.inner_text('.pchat'), 'project AI reply missing'; shot(p, 'project')
+    # brain + Claude link
+    p.goto(BASE + 'index.html?as=owner#/settings'); p.wait_for_selector('#br-text'); p.fill('#br-text', 'استشاري Odoo'); p.click('[data-act="stBrain"]'); p.wait_for_timeout(300)
+    p.click('[data-act="stMcp"]'); p.wait_for_selector('#mcp-url'); assert '/functions/v1/mcp/' in p.input_value('#mcp-url'); shot(p, 'settings-brain')
     p.goto(BASE + 'index.html?as=owner#/shela'); p.wait_for_selector('.subtabs')
     shot(p, '2-owner-shela-balance')
     bal = p.inner_text('.hero .v'); assert '+120' in bal, f'unexpected owner balance {bal}'
