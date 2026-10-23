@@ -264,3 +264,23 @@ ul.coach{margin:0;padding-inline-start:18px;display:grid;gap:4px;font-size:14px}
 .report .foot{color:#6B6253;font-size:12px}
 
 @media (prefers-reduced-motion:no-preference){.sheet:not([hidden]){animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+
+/* swipe between tabs */
+#view[data-slide="l"]{animation:slideL .22s ease-out} #view[data-slide="r"]{animation:slideR .22s ease-out}
+@keyframes slideL{from{transform:translateX(-28px);opacity:.4}to{transform:none;opacity:1}}
+@keyframes slideR{from{transform:translateX(28px);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){#view[data-slide]{animation:none}}
+/* tasks as tiles (mini cards) */
+.tl.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px}
+.tiles .task{grid-template-columns:auto 1fr;grid-template-areas:"chk star" "body body";gap:8px;padding:10px 12px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);min-height:104px;align-content:start;position:relative;overflow:hidden}
+.tiles .task:last-child{border-bottom:1px solid var(--line)}
+.tiles .task[style]{border-top:4px solid hsl(var(--ph) 45% 45%)}
+.tiles .task.p2{background:color-mix(in srgb,var(--gold-soft) 55%,var(--bg))} .tiles .task.p3{background:color-mix(in srgb,var(--neg-soft) 60%,var(--bg))}
+.tiles .chk{grid-area:chk;margin:0} .tiles .star{grid-area:star;justify-self:end} .tiles .task>span:last-child{grid-area:star}
+.tiles .tbody{grid-area:body}
+.tiles .tt{font-weight:600;font-size:14.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tiles .meta{margin-top:6px}
+.tiles .is-done{opacity:.7}
+.lay{margin-inline-start:auto}
+.progress-line .lay{padding:2px 10px}
+@media (max-width:330px){.tl.tiles{grid-template-columns:1fr}}

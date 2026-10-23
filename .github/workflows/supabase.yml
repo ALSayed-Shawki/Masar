@@ -51,3 +51,42 @@ jobs:
             if [ "${PIPESTATUS[0]}" -ne 0 ]; then fail=1; tail -5 "fn-$f.log" | while read -r l; do echo "::error title=Function $f::$l"; done; fi
           done
           exit $fail
+      - name: Schedule reminders (every 5 minutes)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+          if [ -z "$CRON_SECRET" ]; then echo "::warning::CRON_SECRET is empty, reminders not scheduled"; exit 0; fi
+          # The secret goes into Supabase Vault; the cron job reads it from there, so it never sits in the job text.
+          python3 - > q.json <<'PY'
+          import json, os
+          s = os.environ["CRON_SECRET"].replace("'", "''")
+          ref = os.environ["PROJECT_REF"]
+          q = f"""
+          create extension if not exists pg_cron with schema pg_catalog;
+          create extension if not exists pg_net with schema extensions;
+          do $$ declare sid uuid; begin
+            select id into sid from vault.secrets where name = 'masar_cron_secret';
+            if sid is null then perform vault.create_secret('{s}', 'masar_cron_secret');
+            else perform vault.update_secret(sid, '{s}'); end if;
+          end $$;
+          select cron.unschedule(jobid) from cron.job where jobname = 'masar-reminders';
+          select cron.schedule('masar-reminders', '*/5 * * * *', $job$
+            select net.http_post(
+              url := 'https://{ref}.supabase.co/functions/v1/reminders',
+              headers := jsonb_build_object('Content-Type', 'application/json',
+                'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'masar_cron_secret')),
+              body := '{{}}'::jsonb, timeout_milliseconds := 30000);
+          $job$);
+          """
+          print(json.dumps({"query": q}))
+          PY
+          code=$(curl -sS -o resp.json -w '%{http_code}' -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @q.json)
+          rm -f q.json
+          if [ "${code:0:1}" != "2" ]; then echo "::error title=Cron::HTTP $code $(head -c 400 resp.json)"; exit 1; fi
+          # one manual run to prove the function accepts the secret
+          r=$(curl -sS -w ' HTTP %{http_code}' -X POST "https://$PROJECT_REF.supabase.co/functions/v1/reminders" -H "x-cron-secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{}')
+          echo "reminders test: $r"
+          echo "::notice title=Reminders::$r"
+          case "$r" in *"HTTP 200"*) ;; *) echo "::error title=Reminders::$r"; exit 1;; esac

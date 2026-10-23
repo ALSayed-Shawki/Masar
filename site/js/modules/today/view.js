@@ -8,7 +8,7 @@ import { errText } from '../../core/supa.js';
 import { CONFIG } from '../../config.js';
 import { P, saveDay, saveWeek, update, insert, refresh, openTasks, doneDate } from '../../core/store.js';
 import { sb } from '../../core/supa.js';
-import { taskList, byDue } from '../tasks/view.js';
+import { taskList, byDue, layoutToggle } from '../tasks/view.js';
 
 export const PRAYERS = [['fajr', 'الفجر'], ['dhuhr', 'الظهر'], ['asr', 'العصر'], ['maghrib', 'المغرب'], ['isha', 'العشاء']];
 const PST = { ontime: 'في وقتها', late: 'متأخرة', missed: 'فاتت' };
@@ -90,7 +90,7 @@ export function renderToday(root, rerender) {
     <div class="qa-row"><input id="qa-text" placeholder="اتطلب منك إيه؟ أو حاجة لازم تخلص…" enterkeyhint="done"><button class="btn primary" type="submit">إضافة</button></div>
   </form>
   ${hour >= 19 && lateToday ? `<a class="card linkcard warnc" href="#/review"><span><b>آخر اليوم</b><br><span class="hint">فاضل ${lateToday} مخلصتش. ننقلهم لإمتى؟</span></span><span class="go">راجع</span></a>` : ''}
-  <div class="progress-line"><span>خلصت <b class="num">${doneToday.length}</b> من <b class="num">${doneToday.length + board.length}</b> النهارده</span><span class="hint">الأسبوع: <b class="num">${st.done.length}</b> · <a class="link" href="#/ledger">الميزان</a></span></div>
+  <div class="progress-line"><span>خلصت <b class="num">${doneToday.length}</b> من <b class="num">${doneToday.length + board.length}</b> النهارده</span><span class="hint">الأسبوع: <b class="num">${st.done.length}</b> · <a class="link" href="#/ledger">الميزان</a></span>${board.length ? layoutToggle() : ''}</div>
   ${groups.size ? [...groups.entries()].sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1)).map(([pid, items]) => block(pid, items)).join('') : '<section class="card"><p class="empty">مفيش حاجة مستحقة النهارده. سجّل أي طلب يجيلك من فوق، أو اختار من المهام بالنجمة ★.</p></section>'}
   ${doneToday.length ? `<details class="card donecard"><summary><b>اللي خلص النهارده</b> <span class="num">${doneToday.length}</span></summary>${doneToday.map(t => `<div class="item"><p>✓ ${esc(t.title)}${t.project_id ? ` <span class="chip">${esc(P.projects.find(p => p.id === t.project_id)?.name || '')}</span>` : ''}</p>${t.done_note ? `<p class="hint">${esc(t.done_note)}</p>` : `<button class="mini" data-act="tdNote" data-id="${t.id}">ضيف ملاحظة</button>`}</div>`).join('')}</details>` : ''}
   ${notes.length ? `<section class="card warn"><div class="sh"><h2>انتبه</h2></div><ul class="coach">${notes.slice(0, 4).map(n => `<li>${n}</li>`).join('')}</ul></section>` : ''}

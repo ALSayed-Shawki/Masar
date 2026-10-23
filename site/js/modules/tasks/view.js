@@ -17,15 +17,20 @@ export function dueLabel(s) {
 const dueCls = (s, done) => { if (done) return ''; const n = dayDiff(s, today()); return n < 0 ? 'over' : n === 0 ? 'today' : ''; };
 export const byDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || (b.priority || 1) - (a.priority || 1);
 
+// a stable color per project, so its tiles are recognisable at a glance
+const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 export function taskRow(t) {
   const done = t.status === 'done', star = t.focus_date === today();
-  return `<li class="task p${t.priority || 1} ${done ? 'is-done' : ''}">
+  return `<li class="task p${t.priority || 1} ${done ? 'is-done' : ''}"${t.project_id ? ` style="--ph:${hue(t.project_id)}"` : ''}>
   <button class="chk" data-act="tkToggle" data-id="${t.id}" aria-label="${done ? 'رجّعها مفتوحة' : 'تم'}">${done ? '✓' : ''}</button>
   <button class="tbody" data-act="tkEdit" data-id="${t.id}"><span class="tt">${esc(t.title)}</span>
   <span class="meta">${t.kind === 'request' ? '<span class="chip req">طلب</span>' : ''}${t.project_id ? `<span class="chip">${esc(pName(t.project_id))}</span>` : ''}${t.due ? `<span class="due ${dueCls(t.due, done)}">${dueLabel(t.due)}</span>` : ''}${(t.rolled || 0) >= 2 && !done ? `<span class="rolled">اترحّلت ${t.rolled} مرات</span>` : ''}${!t.dod && !done ? '<span>بدون تعريف إنجاز</span>' : ''}</span></button>
   ${done ? '<span></span>' : `<button class="star ${star ? 'on' : ''}" data-act="tkFocus" data-id="${t.id}" aria-label="${star ? 'شيلها من أهم 3' : 'ضيفها لأهم 3 النهارده'}">★</button>`}</li>`;
 }
-export const taskList = a => `<ul class="tl">${a.map(taskRow).join('')}</ul>`;
+// tiles (mini cards) by default; the person can switch to a plain list and it is remembered on this phone
+export const layout = () => { try { return localStorage.getItem('masar.taskLayout') || 'tiles'; } catch { return 'tiles'; } };
+export const taskList = a => `<ul class="tl ${layout() === 'tiles' ? 'tiles' : ''}">${a.map(taskRow).join('')}</ul>`;
+export const layoutToggle = () => `<button class="btn ghost sm lay" data-act="tkLayout" aria-label="طريقة العرض">${layout() === 'tiles' ? '☰ قائمة' : '▦ كروت'}</button>`;
 
 export function projSelect(id, cur) {
   return `<select id="${id}"><option value="">بدون مشروع</option>${Object.entries(AREAS).map(([a, l]) => {
@@ -45,7 +50,7 @@ export function renderTasks(root, rerender) {
   root.innerHTML = `
   <div class="chips">${[['open', 'مفتوحة'], ['done', 'منجزة']].map(([k, l]) => `<button class="${UI.view === k ? 'on' : ''}" data-act="tkView" data-v="${k}">${l}</button>`).join('')}</div>
   <div class="chips"><button class="${UI.proj === 'all' ? 'on' : ''}" data-act="tkProj" data-v="all">كل المشاريع</button>${P.projects.map(p => `<button class="${UI.proj === p.id ? 'on' : ''}" data-act="tkProj" data-v="${p.id}">${esc(p.name)}</button>`).join('')}<button class="${UI.proj === 'none' ? 'on' : ''}" data-act="tkProj" data-v="none">بدون مشروع</button></div>
-  <div class="actions"><button class="btn primary sm" data-act="tkNew">مهمة جديدة</button><button class="btn ghost sm" data-act="tkNewProject">مشروع جديد</button></div>
+  <div class="actions"><button class="btn primary sm" data-act="tkNew">مهمة جديدة</button><button class="btn ghost sm" data-act="tkNewProject">مشروع جديد</button>${layoutToggle()}</div>
   ${!a.length ? `<section class="card"><p class="empty">${done ? 'لسه مفيش مهام منجزة هنا.' : 'مفيش مهام مفتوحة هنا. سجّل أي حاجة من زرار +.'}</p></section>`
     : done ? `<section class="card">${taskList(a.slice(0, 80))}</section>`
     : ['متأخرة', 'النهارده', 'خلال أسبوع', 'بعد كده', 'بدون موعد'].filter(k => groups[k]).map(k => `<section class="card"><div class="sh"><h2>${k}</h2><span class="count num">${groups[k].length}</span></div>${taskList(groups[k])}</section>`).join('')}`;
@@ -65,6 +70,7 @@ export function sheetTask(id, preset = {}) {
 
 registerActions({
   tkView: el => { UI.view = el.dataset.v; UI.rerender(); },
+  tkLayout: () => { try { localStorage.setItem('masar.taskLayout', layout() === 'tiles' ? 'list' : 'tiles'); } catch {} document.dispatchEvent(new Event('masar:rerender')); },
   tkProj: el => { UI.proj = el.dataset.v; UI.rerender(); },
   tkNew: () => sheetTask(null),
   tkEdit: el => sheetTask(el.dataset.id),

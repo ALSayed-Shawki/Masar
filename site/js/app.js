@@ -104,6 +104,27 @@ document.addEventListener('click', ev => {
   const f = actions[el.dataset.act];
   if (f) { ev.preventDefault(); f(el); }
 });
+document.addEventListener('masar:rerender', () => render());
+
+// Swipe left / right between the bottom tabs (RTL: swiping left goes to the next tab on the left).
+// Ignored inside inputs, sideways-scrolling rows, open sheets and the group page.
+let sx = 0, sy = 0, st0 = 0, swipeOK = false;
+view.addEventListener('touchstart', e => {
+  const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st0 = Date.now();
+  swipeOK = e.touches.length === 1 && !sheetOpen() && !e.target.closest('input,textarea,select,.chips,.hscroll,.nosw,canvas');
+}, { passive: true });
+view.addEventListener('touchend', e => {
+  if (!swipeOK || MODE !== 'masar' || !session || isAnon(session)) return;
+  const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || Date.now() - st0 > 700) return;
+  const [page] = route(); if (page === 'shela') return;
+  const keys = TABS.map(x => x[0]), i = keys.indexOf(TAB_OF[page] || page); if (i < 0) return;
+  const j = i + (dx < 0 ? 1 : -1); if (j < 0 || j >= keys.length) return;
+  view.dataset.slide = dx < 0 ? 'l' : 'r';
+  location.hash = '#/' + keys[j];
+  setTimeout(() => { delete view.dataset.slide; }, 260);
+}, { passive: true });
+
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()) closeSheet(); });
 addEventListener('hashchange', () => { if (sheetOpen()) closeSheet(); render(); scrollTo(0, 0); });
 let pending = false;
